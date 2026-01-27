@@ -1,0 +1,28 @@
+name = "linkstash"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "LINKS"
+id = "c836f74b2cfc47cba2f20cb141c9a04e"
+
+# Secrets should NOT be stored in `wrangler.toml`. Set them with:
+#   wrangler secret put AUTH_KEY
+# or manage them in your CI provider and inject them at deploy time.
+# `wrangler` stores secrets securely and they will not appear in this file.
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
+
