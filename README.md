@@ -7,7 +7,7 @@
 ## How it works
 
 1. `ash` detects links posted to a WhatsApp group (bridged to Matrix) and forwards them to the Worker API.
-2. `linkstash` stores the raw Markdown (`.md`) in Workers KV.
+2. `linkstash` calls `lava` and stores the markdown + rich frontmatter
 3. The Worker homepage lists saved links and renders the parsed Markdown in a Hacker News–style feed.
 
 ## Quick start

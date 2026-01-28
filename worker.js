@@ -158,6 +158,10 @@ export default {
           const entry = existingMap[nurl];
           entry.data.count = (entry.data.count || 1) + 1;
           entry.data.ts = now;
+          // Optionally update meta if missing
+          if (item.frontmatter && !entry.data.meta) {
+            entry.data.meta = item.frontmatter;
+          }
           await env.LINKS.put(entry.keyName, JSON.stringify(entry.data));
         } else {
           const key = "link:" + crypto.randomUUID();
@@ -166,7 +170,8 @@ export default {
             domain: new URL(item.url).hostname,
             body: item.body,
             ts: now,
-            count: 1
+            count: 1,
+            meta: item.frontmatter || {}
           };
           await env.LINKS.put(key, JSON.stringify(obj));
           existingMap[nurl] = { keyName: key, data: obj };
@@ -245,60 +250,91 @@ export default {
 
       // Group entries by domain and dedupe identical URLs; sum votes per domain and per-URL
       const esc = (s) => (s || '').toString().replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      const domainMap = {};
-      for (const item of list) {
-        const d = item.domain || (item.url ? new URL(item.url).hostname : 'unknown');
-        domainMap[d] = domainMap[d] || { domain: d, urlMap: {}, totalCount: 0, ts: 0 };
-        const nurl = item.url ? normalizeUrl(item.url) : d;
-        const count = item.count || 1;
-        domainMap[d].totalCount += count;
-        domainMap[d].ts = Math.max(domainMap[d].ts || 0, item.ts || 0);
-
-        const urlMap = domainMap[d].urlMap;
-        if (urlMap[nurl]) {
-          urlMap[nurl].count += count;
-          // update ts and prefer latest body/url
-          urlMap[nurl].ts = Math.max(urlMap[nurl].ts || 0, item.ts || 0);
-          if ((item.ts || 0) >= (urlMap[nurl].ts || 0)) {
-            urlMap[nurl].body = item.body || urlMap[nurl].body;
-            urlMap[nurl].url = item.url || urlMap[nurl].url;
-          }
-        } else {
-          urlMap[nurl] = {
-            url: item.url,
-            body: item.body || '',
-            count: count,
-            ts: item.ts || 0
-          };
+      // Show one entry per link, not per domain
+      const links = list.sort((a, b) => b.ts - a.ts);
+      const entries = links.map(item => {
+        const title = (item.meta && item.meta.title) ? item.meta.title : (item.domain || (item.url ? new URL(item.url).hostname : 'unknown'));
+        const domain = item.domain || (item.url ? new URL(item.url).hostname : 'unknown');
+        const rendered = sanitizeHtml(mdToHtml(item.body || ''));
+        const encoded = encodeURIComponent(rendered);
+        // YouTube video preview if applicable
+        let videoEmbed = '';
+        const ytMatch = item.url && item.url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+        if (ytMatch) {
+          const ytId = ytMatch[1];
+          videoEmbed = `<div class="video" style="margin-bottom:1rem"><iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/${ytId}" frameborder="0" allowfullscreen sandbox="allow-same-origin allow-scripts"></iframe></div>`;
         }
-      }
-
-      const domains = Object.values(domainMap).sort((a, b) => b.ts - a.ts);
-
-      const entries = domains.map(d => {
-        const inner = Object.values(d.urlMap).sort((a, b) => b.ts - a.ts).map(it => {
-          const rendered = sanitizeHtml(mdToHtml(it.body || ''));
-          // encode the rendered HTML so it isn't injected until the details is opened
-          const encoded = encodeURIComponent(rendered);
-          return `<div style="margin-bottom:0.75rem"><div class="lazy-content" data-html="${encoded}"><div class="lazy-placeholder">Click to load</div></div><div class="meta"><a href="${esc(it.url)}" target="_blank" rel="noopener noreferrer">Visit</a></div></div>`;
-        }).join('');
-
         return `
         <details>
-          <summary><a href="https://${esc(d.domain)}" target="_blank" rel="noopener noreferrer">${esc(d.domain)}</a> <span style="color:#9aa6bf;font-weight:normal">(${d.totalCount} votes)</span></summary>
-          ${inner}
+          <summary class="ls-summary">
+            <span class="ls-title"><a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(title)}</a></span>
+            <span class="ls-domain">${esc(domain)}</span>
+          </summary>
+          <div style="margin-bottom:0.5rem">
+            ${videoEmbed}
+            <div class="lazy-content" data-html="${encoded}"><div class="lazy-placeholder">Click to load</div></div>
+            <div class="meta"><a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">Visit</a></div>
+          </div>
         </details>
-      `;
+        `;
       }).join('');
 
       return new Response(
         `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>📎 HSP Linkstash</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HSP Linkstash - Preview</title>
+  <meta name="description" content="Collect and share interesting links and articles you find during the week!">
+  <meta property="og:title" content="HSP Linkstash" />
+  <meta property="og:description" content="Collect and share interesting links and articles you find during the week!" />
+  <meta property="og:image" content="https://raw.githubusercontent.com/homebrew-ec-foss/linkstash/refs/heads/main/linkstash-preview.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://linkstash.hsp-ec.xyz/" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="HSP Linkstash" />
+  <meta name="twitter:description" content="Collect and share interesting links and articles you find during the week!" />
+  <meta name="twitter:image" content="https://raw.githubusercontent.com/homebrew-ec-foss/linkstash/refs/heads/main/linkstash-preview.png" />
 <style>
+/* Linkstash summary flex layout for desktop/mobile */
+.ls-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  line-height: 1.25;
+  padding-bottom: 2px;
+}
+.ls-title {
+  font-weight: 600;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+.ls-domain {
+  font-size: 13px;
+  color: #9aa6bf;
+  font-weight: 400;
+  flex-shrink: 0;
+  margin-left: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 600px) {
+  .ls-summary {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .ls-domain {
+    margin-left: 0;
+    margin-top: 2px;
+    white-space: normal;
+  }
+}
 :root{
   --bg:#ffffff; --panel:#ffffff; --muted:#6a6a6a; --accent:#ff6600; --text:#111111; --link:#000000;
 }
@@ -327,6 +363,25 @@ body {
 .details-list details{ counter-increment:item; padding:12px 14px; display:block; border-top:1px solid #f2f2f2; background:transparent; }
 .details-list details:first-child{ border-top:none; }
 .details-list summary{ list-style:none; cursor:pointer; font-size:16px; color:var(--link); font-weight:700; display:block; padding:0; }
+.details-list summary, .details-list a {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .details-list summary, .details-list a {
+    font-size: 15px;
+    word-break: break-word;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.3;
+    display: block;
+  }
+  .details-list summary {
+    padding-right: 0;
+  }
+}
 .details-list summary::before{ content: counter(item) '.'; display:inline-block; width:2rem; margin-right:8px; color:var(--muted); font-weight:600; }
 .details-list a{ color:var(--link); text-decoration:none; }
 .details-list a:hover{text-decoration:underline;}
