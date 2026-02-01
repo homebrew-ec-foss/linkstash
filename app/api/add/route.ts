@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { client, initDb, LinkRecord } from '../../../scripts/db';
 
-interface LinkstashItem {
-    url: string;
-    body: string;
-    frontmatter?: Record<string, any>;
-}
-
 interface ExistingLinkEntry extends LinkRecord {
-    // contentKey removed; content is stored inline
 }
 
 interface AddRequestBody {
