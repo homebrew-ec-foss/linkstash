@@ -6,3 +6,4 @@ node_modules
 .next
 links.json
 tsconfig.tsbuildinfo
+scripts/import-test.sh

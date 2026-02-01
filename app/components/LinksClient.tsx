@@ -8,6 +8,34 @@ function sortLinks(list: LinkItem[]) {
     return list.slice().sort((a: any, b: any) => (b.count || 0) - (a.count || 0) || (b.ts || 0) - (a.ts || 0));
 }
 
+function formatDateLabel(ts: number | undefined) {
+    if (!ts) return 'Unknown';
+    const d = new Date(ts);
+    const now = new Date();
+
+    const isSameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+    if (isSameDay(d, now)) return 'Today';
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (isSameDay(d, yesterday)) return 'Yesterday';
+
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function groupByDate(list: LinkItem[]) {
+    const groups: Record<string, LinkItem[]> = {};
+    list.forEach((item) => {
+        const key = item.ts ? new Date(item.ts).toISOString().slice(0, 10) : 'unknown';
+        groups[key] = groups[key] || [];
+        groups[key].push(item);
+    });
+
+    // Convert to sorted array of groups (newest first)
+    const keys = Object.keys(groups).sort((a, b) => (b > a ? 1 : -1));
+    return keys.map((k) => ({ key: k, label: k === 'unknown' ? 'Unknown' : formatDateLabel(new Date(k).getTime()), items: groups[k] }));
+}
+
 export default function LinksClient() {
     const [links, setLinks] = useState<LinkItem[] | null>(null);
     const [loading, setLoading] = useState(true);
@@ -33,7 +61,7 @@ export default function LinksClient() {
                 if (!res.ok) return;
                 const data = await res.json();
                 if (cancelled) return;
-                const sorted = sortLinks(data);
+                const sorted = sortLinks(data).map((item: any, i: number) => ({ ...item, displayIndex: i + 1 }));
 
                 const prev = links || (cached ? JSON.parse(cached) : null);
                 const prevStr = prev ? JSON.stringify(prev.map((i: any) => i.id || i.url)) : '';
@@ -79,31 +107,42 @@ export default function LinksClient() {
         );
     }
 
+    // Group links by date
+    const groups = groupByDate(links);
+
     return (
         <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 10 }}>
                 <div style={{ fontWeight: 600 }}>Links</div>
                 <div className={`refresh-badge ${refreshed ? 'show' : ''}`}>{refreshed ? 'Updated' : loading ? 'Loading...' : 'Latest'}</div>
             </div>
-            <ol className="link-list">
-                {links.map((l: any, idx: number) => {
-                    const url = l.url || (l.meta && l.meta.url) || '';
-                    const title = l.title || l.name || (l.meta && l.meta.title) || url || 'Untitled';
-                    let domain = l.domain || (l.meta && l.meta.domain) || '';
-                    if (!domain && url) { try { domain = new URL(url).hostname } catch (e) { domain = '' } }
 
-                    return (
-                        <li key={l.id || url || idx} className={`link-item ${refreshed ? 'flash' : ''}`}>
-                            <div className="rank">{idx + 1}.</div>
-                            <div className="link-main">
-                                <a href={url || '#'} target="_blank" rel="noopener noreferrer" className="link-title">{title}</a>
-                                <div className="link-domain">{domain}{l.roomComment ? ` — ${l.roomComment}` : ''}</div>
-                            </div>
-                            <div className="votes">{l.count ? `${l.count} votes` : ''}</div>
-                        </li>
-                    )
-                })}
-            </ol>
+            <div>
+                {groups.map((g) => (
+                    <div key={g.key} className="date-group">
+                        <div className="date-heading">{g.label}</div>
+                        <ol className="link-list">
+                            {g.items.map((l: any, idx: number) => {
+                                const url = l.url || (l.meta && l.meta.url) || '';
+                                const title = l.title || l.name || (l.meta && l.meta.title) || url || 'Untitled';
+                                let domain = l.domain || (l.meta && l.meta.domain) || '';
+                                if (!domain && url) { try { domain = new URL(url).hostname } catch (e) { domain = '' } }
+
+                                return (
+                                    <li key={l.id || url || idx} className={`link-item ${refreshed ? 'flash' : ''}`}>
+                                        <div className="rank">{l.displayIndex || idx + 1}.</div>
+                                        <div className="link-main">
+                                            <a href={url || '#'} target="_blank" rel="noopener noreferrer" className="link-title">{title}</a>
+                                            <div className="link-domain">{domain}{l.roomComment ? ` — ${l.roomComment}` : ''}</div>
+                                        </div>
+                                        <div className="votes">{l.count ? `${l.count} votes` : ''}</div>
+                                    </li>
+                                )
+                            })}
+                        </ol>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }
