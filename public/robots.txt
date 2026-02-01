@@ -1,0 +1,9 @@
+# Allow only the homepage and disallow select paths
+User-agent: *
+Disallow: /reader
+Disallow: /admin
+Disallow: /api
+Allow: /
+
+# Note: some crawlers may not support advanced patterns; explicitly disallowing
+# sensitive paths ensures they're less likely to be crawled.

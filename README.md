@@ -2,13 +2,7 @@
 
 **linkstash** is a small experiment for collecting and sharing interesting links and short notes you find during the week.
 
-## Branding & social preview
-
-- **Favicon:** `public/favicon.svg` — uses the **🔗 + 🔥** emoji (replace with your own SVG/ICO if you prefer).
-- **Social preview image:** `public/linkstash-preview.png` — this PNG is used for Open Graph / Twitter previews (recommended ~1200×630). Replace and redeploy to refresh previews.
-
-
-> Built with TypeScript, using [lava](https://github.com/polarhive/lava) and [ash](https://github.com/polarhive/ash).
+> Usses [lava](https://github.com/polarhive/lava) and [ash](https://github.com/polarhive/ash).
 
 ## How it works
 
@@ -21,38 +15,15 @@
 ```bash
 bun install
 cp .env.example .env
-# Edit .env with your Turso credentials
-bun run db:init
-bun run type-check  # Optional: verify TypeScript compilation
 bunx vercel dev
 ```
 
 ## Environment Variables
 
-Set the following environment variables in Vercel:
-
 - `AUTH_KEY`: Your authentication key
 - `TURSO_DATABASE_URL`: Your Turso database URL
 - `TURSO_AUTH_TOKEN`: Your Turso auth token
 
-### Initialize the database schema:
-```bash
-bun run db:init
-```
-
-## Local Development
-
-For local development, create a `.env` file with your environment variables:
-
-```bash
-cp .env.example .env
-# Edit .env with your Turso database URL, auth token, and auth key
-```
-
-Then run:
-```bash
-bunx vercel dev
-```
 
 ## API Endpoints
 
@@ -101,5 +72,3 @@ curl "http://localhost:3000/api/links?url=https%3A%2F%2Fexample.com%2Farticle"
 ```
 
 - Returns the matching link record (JSON) or a `404` if not present.
-
-If you're using the hosted app, replace `http://localhost:3000` with your deployment URL (for example `https://linkstash.hsp-ec.xyz`).

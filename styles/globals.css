@@ -215,6 +215,166 @@ ol.link-list li:last-child {
     border-radius: 4px;
 }
 
+/* Admin page styles */
+.admin {
+    padding: 16px;
+    overflow-x: hidden;
+}
+
+.admin .admin-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    /* allow controls to wrap on smaller screens to avoid overflow */
+}
+
+.admin .admin-input,
+.admin .search-input {
+    flex: 1 1 220px;
+    /* grow and shrink, with sensible base */
+    min-width: 140px;
+    max-width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text);
+    box-sizing: border-box;
+}
+
+/* Buttons should not force additional width */
+.admin .admin-small {
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: inherit;
+    flex: 0 0 auto;
+}
+
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.admin-table thead th {
+    text-align: left;
+    padding: 8px;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.admin-table tbody tr {
+    border-top: 1px solid var(--border);
+}
+
+.admin-table td {
+    padding: 8px;
+    vertical-align: top;
+}
+
+.title-line {
+    font-weight: 600;
+}
+
+.url-line {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 6px;
+}
+
+.url-line a {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* Ensure the delete button column is always visible and the title/URL column wraps */
+.admin-table td:last-child {
+    width: 140px;
+    min-width: 120px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.admin-table td:nth-child(2) {
+    /* leave space for ID and action column so it doesn't push the delete button off-screen */
+    max-width: calc(100% - 380px);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.delete-btn {
+    color: var(--brand-text);
+    background: var(--brand);
+    border: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+
+.delete-btn[disabled] {
+    opacity: 0.6
+}
+
+.id-cell code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+@media (max-width: 680px) {
+
+    /* Header controls wrap on small screens */
+    .admin .admin-controls {
+        flex-wrap: wrap;
+    }
+
+    .admin .admin-input,
+    .admin .search-input {
+        flex: 1 1 100%;
+        min-width: 0;
+    }
+
+    .admin-table thead {
+        display: none
+    }
+
+    .admin-table,
+    .admin-table tbody,
+    .admin-table tr,
+    .admin-table td {
+        display: block;
+        width: 100%
+    }
+
+    .admin-table tr {
+        margin-bottom: 12px
+    }
+
+    .admin-table td {
+        padding: 8px 4px
+    }
+
+    /* Allow the middle column to expand and keep the action button visible below it */
+    .admin-table td:nth-child(2) {
+        max-width: none;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .admin-table td:last-child {
+        width: auto;
+        min-width: 0;
+        text-align: left;
+        padding-top: 8px
+    }
+
+    .delete-btn {
+        width: 100%
+    }
+}
+
 /* Refresh badge + flash animation used by the client-side list */
 .refresh-badge {
     background: var(--refresh-bg);

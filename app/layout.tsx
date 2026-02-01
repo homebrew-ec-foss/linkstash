@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import '../styles/globals.css'
+import ServiceWorkerRegister from './components/ServiceWorkerRegister'
 
 export const metadata: Metadata = {
     title: 'HSP Linkstash',
@@ -38,10 +39,13 @@ export default function RootLayout({
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
                 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
                 <link rel="icon" href="/favicon.svg" />
+                <link rel="manifest" href="/manifest.json" />
                 <meta name="theme-color" content="#0f172a" />
             </head>
             <body>
                 {children}
+                <ServiceWorkerRegister />
+                <script dangerouslySetInnerHTML={{ __html: `if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(regs => { if (!regs || regs.length === 0) navigator.serviceWorker.register('/sw.js').catch(()=>{}); });` }} />
             </body>
         </html>
     )

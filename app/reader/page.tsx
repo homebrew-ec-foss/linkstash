@@ -65,7 +65,7 @@ export default function ReaderPage() {
         return () => window.removeEventListener('hashchange', readHash);
     }, []);
 
-    // Load meta data for queue items from /api/links (so we can show hostname/title)
+    // Load meta data for queue items from the stored links cache (links_cache)
     useEffect(() => {
         if (!queue.length) return;
 
@@ -75,18 +75,22 @@ export default function ReaderPage() {
             initial_item_id: queue[0],
         });
 
-        (async () => {
-            try {
-                const res = await fetch('/api/links');
-                if (!res.ok) return;
-                const links = await res.json();
-                const m: Record<string, any> = {};
-                (links || []).forEach((l: any) => { if (l.id) m[l.id] = l; });
-                setMetas(m);
-            } catch (e) {
-                // ignore
-            }
-        })();
+        try {
+            const cache = localStorage.getItem('links_cache');
+            if (!cache) { setMetas({}); return; }
+            const arr = JSON.parse(cache) as any[];
+            const m: Record<string, any> = {};
+            arr.forEach((l) => {
+                if (l && l.id) m[l.id] = l;
+            });
+
+            // Keep only metas for items in the queue
+            const filtered: Record<string, any> = {};
+            queue.forEach((id) => { if (m[id]) filtered[id] = m[id]; });
+            setMetas(filtered);
+        } catch (e) {
+            // ignore localStorage errors
+        }
     }, [queue]);
 
     // Load content for current index
@@ -101,6 +105,32 @@ export default function ReaderPage() {
             setError(null);
             setContent(null);
 
+            // Try to load cached content from localStorage first
+            try {
+                const cached = typeof window !== 'undefined' ? localStorage.getItem(`reader:content:${id}`) : null;
+                if (cached) {
+                    try {
+                        const parsed = JSON.parse(cached) as { ts: number; content: string };
+                        if (parsed && parsed.content) {
+                            setContent(parsed.content);
+                            try {
+                                const s = localStorage.getItem(`reader:meta:${id}`);
+                                if (s) {
+                                    const m = JSON.parse(s);
+                                    setMetas((prev) => ({ ...(prev || {}), [id]: m }));
+                                }
+                            } catch (err) {
+                                // ignore parse/localStorage errors
+                            }
+                        }
+                    } catch (err) {
+                        // ignore parse errors
+                    }
+                }
+            } catch (err) {
+                // ignore localStorage access errors
+            }
+
             try {
                 const controller = new AbortController();
                 let timedOut = false;
@@ -111,7 +141,43 @@ export default function ReaderPage() {
                 if (timedOut) return;
                 if (!res.ok) { setError(`Content not found (${res.status})`); return; }
                 const txt = await res.text();
-                if (!cancelled) setContent(txt);
+
+                if (!cancelled) {
+                    // If we had a cached copy and it differs, update UI
+                    if (txt !== content) setContent(txt);
+
+                    // Persist only content to localStorage; update links_cache entry title if helpful
+                    try {
+                        const obj = { ts: Date.now(), content: txt };
+                        localStorage.setItem(`reader:content:${id}`, JSON.stringify(obj));
+
+                        // Try to extract H1 and update links_cache if it lacks a title
+                        const extracted = extractFirstH1WithoutCode(txt || '');
+                        if (extracted.h1) {
+                            try {
+                                const cache = localStorage.getItem('links_cache');
+                                if (cache) {
+                                    const arr = JSON.parse(cache) as any[];
+                                    const idx = arr.findIndex(a => a.id === id);
+                                    if (idx >= 0) {
+                                        const entry = arr[idx];
+                                        if (!entry.meta) entry.meta = {};
+                                        if (!entry.meta.title) {
+                                            entry.meta.title = extracted.h1;
+                                            arr[idx] = entry;
+                                            localStorage.setItem('links_cache', JSON.stringify(arr));
+                                            setMetas((prev) => ({ ...(prev || {}), [id]: entry }));
+                                        }
+                                    }
+                                }
+                            } catch (e) {
+                                // ignore
+                            }
+                        }
+                    } catch (err) {
+                        // ignore quota errors or localStorage errors
+                    }
+                }
             } catch (e) {
                 if (!((e as any)?.name === 'AbortError')) setError('Error loading content');
             } finally {
