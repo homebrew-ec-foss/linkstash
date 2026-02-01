@@ -1,7 +1,7 @@
 {
   "name": "linkstash",
   "version": "1.0.0",
-  "description": "A lightweight link collection service",
+  "description": "linkstash is a small experiment for collecting and sharing interesting links and articles you find during the week",
   "main": "api/index.js",
   "scripts": {
     "build": "next build",
@@ -14,6 +14,8 @@
     "@libsql/client": "^0.17.0",
     "lucide-react": "^0.563.0",
     "next": "^16.1.6",
+    "posthog-js": "^1.336.4",
+    "posthog-node": "^5.24.7",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",

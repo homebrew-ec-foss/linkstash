@@ -7,3 +7,5 @@ node_modules
 links.json
 tsconfig.tsbuildinfo
 scripts/import-test.sh
+.claude
+.env

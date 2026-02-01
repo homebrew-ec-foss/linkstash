@@ -5,6 +5,7 @@ import { Github, BookOpen } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
+import posthog from 'posthog-js';
 
 type LinkItem = any;
 
@@ -171,6 +172,9 @@ export default function LinksClient() {
         if (txt.length <= length) return txt;
         return txt.slice(0, length).trim() + '…';
     }
+
+
+
     // Effect: load content when index or queue changes while open
     useEffect(() => {
         if (readerOpen) {
@@ -255,20 +259,46 @@ export default function LinksClient() {
     }
 
     function closeReader() {
+        posthog.capture('reader_closed', {
+            queue_length: readerQueue.length,
+            current_index: readerIndex,
+        });
         setReaderOpen(false);
         setReaderContent(null);
         setReaderError(null);
     }
 
     function gotoNext() {
-        if (readerIndex < readerQueue.length - 1) setReaderIndex(readerIndex + 1);
+        if (readerIndex < readerQueue.length - 1) {
+            posthog.capture('reader_navigated', {
+                direction: 'next',
+                from_index: readerIndex,
+                to_index: readerIndex + 1,
+                queue_length: readerQueue.length,
+            });
+            setReaderIndex(readerIndex + 1);
+        }
     }
 
     function gotoPrev() {
-        if (readerIndex > 0) setReaderIndex(readerIndex - 1);
+        if (readerIndex > 0) {
+            posthog.capture('reader_navigated', {
+                direction: 'previous',
+                from_index: readerIndex,
+                to_index: readerIndex - 1,
+                queue_length: readerQueue.length,
+            });
+            setReaderIndex(readerIndex - 1);
+        }
     }
 
     function removeFromQueue(index: number) {
+        const removedItem = readerQueue[index];
+        posthog.capture('reader_item_removed', {
+            removed_title: removedItem?.title,
+            removed_index: index,
+            queue_length: readerQueue.length,
+        });
         setReaderQueue((q) => q.filter((_, i) => i !== index));
         if (index === readerIndex) {
             // If removing current, try to show next or close
@@ -297,11 +327,18 @@ export default function LinksClient() {
                             className="reader-header-button"
                             title="Open reading view"
                             onClick={() => {
-                                const q = (links || []).filter((x) => x.id).map((x) => ({ id: x.id, title: x.title || x.name || (x.meta && x.meta.title) || x.url || 'Untitled', url: x.url || (x.meta && x.meta.url) || '' }));
-                                setReaderQueue(q);
-                                setReaderIndex(0);
-                                setReaderMinimal(true);
-                                setReaderOpen(true);
+                                // Open only the first available stored content id (single id in hash)
+                                const firstId = (links || []).find((x) => x.id)?.id;
+                                if (firstId) {
+                                    window.location.href = `/reader#${firstId}`;
+                                } else {
+                                    // fallback: open first external url
+                                    const firstUrl = (links || []).find((x) => x.url || (x.meta && x.meta.url));
+                                    if (firstUrl && (firstUrl.url || (firstUrl.meta && firstUrl.meta.url))) {
+                                        const u = firstUrl.url || (firstUrl.meta && firstUrl.meta.url);
+                                        window.open(u, '_blank');
+                                    }
+                                }
                             }}
                         >
                             <BookOpen size={16} aria-hidden="true" />
@@ -325,17 +362,47 @@ export default function LinksClient() {
     // Group links by date
     const groups = groupByDate(links);
 
-    // Header display: prefer the page title, but avoid repeating the H1 if the content's H1 matches the title
+    // Header display: prefer the page title, but avoid repeating the H1 — extract the H1 from content if present
     const currentReaderItem = readerQueue[readerIndex] || {};
     const title = currentReaderItem.title || '';
     const url = currentReaderItem.url || '';
-    let contentH1 = '';
-    if (readerContent) {
-        const h1Match = readerContent.match(/(^|\n)#\s+(.+?)(\n|$)/);
-        contentH1 = h1Match ? h1Match[2].trim() : '';
+
+    // Extract the first markdown H1 that is NOT inside a fenced code block (``` / ~~~).
+    function extractFirstH1WithoutCode(md?: string) {
+        if (!md) return { h1: '', content: '' };
+        const lines = md.split(/\r?\n/);
+        let inFence = false;
+        let fenceToken = '';
+        let found = '';
+        const out: string[] = [];
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const fenceMatch = line.match(/^(`{3,}|~{3,})/);
+            if (fenceMatch) {
+                if (!inFence) { inFence = true; fenceToken = fenceMatch[1]; }
+                else if (line.startsWith(fenceToken)) { inFence = false; fenceToken = ''; }
+                out.push(line);
+                continue;
+            }
+
+            if (!inFence && !found) {
+                const m = line.match(/^#\s+(.+)$/);
+                if (m) { found = m[1].trim(); continue; }
+            }
+
+            out.push(line);
+        }
+
+        return { h1: found, content: out.join('\n').trimStart() };
     }
+
+    const _extracted = extractFirstH1WithoutCode(readerContent || undefined);
+    const extractedH1 = _extracted.h1 || '';
+    let contentWithoutH1 = _extracted.content || '';
+
     const normalize = (s: string) => (s || '').replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
-    const titleSameAsH1 = title && contentH1 && normalize(title) === normalize(contentH1);
+    const titleSameAsH1 = title && extractedH1 && normalize(title) === normalize(extractedH1);
 
     let headerText = '';
     let headerHref = '';
@@ -352,8 +419,7 @@ export default function LinksClient() {
         headerHref = '';
     }
 
-    // Shorten title for the H1 fallback
-    const shortTitle = title ? title.split(/\s*[-|:]\s*/)[0].trim() : '';
+    const headingTitle = title || '';
 
     return (
         <div className="card">
@@ -366,16 +432,32 @@ export default function LinksClient() {
                         className="reader-header-button"
                         title="Open reading view"
                         onClick={() => {
-                            const q = (links || []).filter((x) => x.id).map((x) => ({ id: x.id, title: x.title || x.name || (x.meta && x.meta.title) || x.url || 'Untitled', url: x.url || (x.meta && x.meta.url) || '' }));
-                            setReaderQueue(q);
-                            setReaderIndex(0);
-                            setReaderMinimal(true);
-                            setReaderOpen(true);
+                            posthog.capture('reader_opened', {
+                                total_links: (links || []).length,
+                            });
+                            // Open only the first available stored content id (single id in hash)
+                            const firstId = (links || []).find((x) => x.id)?.id;
+                            if (firstId) {
+                                window.location.href = `/reader#${firstId}`;
+                            } else {
+                                const firstUrl = (links || []).find((x) => x.url || (x.meta && x.meta.url));
+                                if (firstUrl && (firstUrl.url || (firstUrl.meta && firstUrl.meta.url))) {
+                                    const u = firstUrl.url || (firstUrl.meta && firstUrl.meta.url);
+                                    window.open(u, '_blank');
+                                }
+                            }
                         }}
                     >
                         <BookOpen size={16} aria-hidden="true" />
                     </button>
-                    <a href="https://github.com/homebrew-ec-foss/linkstash" className="gh-button" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository">
+                    <a
+                        href="https://github.com/homebrew-ec-foss/linkstash"
+                        className="gh-button"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="GitHub repository"
+                        onClick={() => posthog.capture('github_link_clicked')}
+                    >
                         <Github size={16} aria-hidden="true" />
                     </a>
                 </div>
@@ -396,7 +478,21 @@ export default function LinksClient() {
                                     <li key={l.id || url || idx} className={`link-item ${refreshed ? 'flash' : ''}`}>
                                         <div className="rank">{l.displayIndex || idx + 1}.</div>
                                         <div className="link-main">
-                                            <a href={url || '#'} target="_blank" rel="noopener noreferrer" className="link-title">{title}</a>
+                                            <a
+                                                href={url || '#'}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="link-title"
+                                                onClick={() => {
+                                                    posthog.capture('link_clicked', {
+                                                        link_title: title,
+                                                        link_url: url,
+                                                        link_domain: domain,
+                                                        link_rank: l.displayIndex || idx + 1,
+                                                        vote_count: l.count || 0,
+                                                    });
+                                                }}
+                                            >{title}</a>
                                             <div className="link-domain">{domain}{l.roomComment ? ` — ${l.roomComment}` : ''}</div>
                                         </div>
 
@@ -447,9 +543,8 @@ export default function LinksClient() {
                                     <div className="p-6 text-center text-gray-500">{readerError}</div>
                                 ) : readerContent ? (
                                     <article className="markdown-body">
-                                        {(!readerContent.match(/(^|\n)#{1}\s+/)) && (shortTitle || readerQueue[readerIndex]?.title) ? (
-                                            <h1 className="markdown-title">{shortTitle || readerQueue[readerIndex]?.title}</h1>
-                                        ) : null}
+                                        {/* Always render the page H1: prefer the extracted H1 from content, otherwise use heading/fallback */}
+                                        <h1 className="markdown-title">{extractedH1 || headingTitle || readerQueue[readerIndex]?.title || headerText || 'Reader'}</h1>
 
                                         <ReactMarkdown
                                             remarkPlugins={[remarkGfm]}
@@ -511,7 +606,7 @@ export default function LinksClient() {
                                                 }
                                             }}
                                         >
-                                            {readerContent}
+                                            {contentWithoutH1}
                                         </ReactMarkdown>
                                     </article>
                                 ) : (

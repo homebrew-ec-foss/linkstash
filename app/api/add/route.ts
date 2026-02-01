@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { client, initDb, LinkRecord } from '../../../scripts/db';
+import { getPostHogClient } from '../../../lib/posthog-server';
 
 interface ExistingLinkEntry extends LinkRecord {
 }
@@ -203,6 +204,21 @@ export async function POST(request: NextRequest) {
                     args: [newCount, now, JSON.stringify(meta), contentToSet || null, submitter, entry.id]
                 });
 
+                // Track link upvoted event with PostHog
+                const posthog = getPostHogClient();
+                posthog.capture({
+                    distinctId: submitter || 'anonymous',
+                    event: 'link_upvoted',
+                    properties: {
+                        link_id: entry.id,
+                        link_url: item.url,
+                        link_domain: new URL(item.url).hostname,
+                        new_vote_count: newCount,
+                        submitted_by: submitter,
+                        room_id: roomId,
+                    }
+                });
+
                 // Ensure meta includes canonical URL
                 try {
                     if (!meta.url) meta.url = item.url;
@@ -242,6 +258,22 @@ export async function POST(request: NextRequest) {
                 await client.execute({
                     sql: 'INSERT INTO links (id, url, domain, content, submitted_by, ts, count, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
                     args: [id, item.url, new URL(item.url).hostname, contentVal, submitter, now, 1, JSON.stringify(meta)]
+                });
+
+                // Track link added event with PostHog
+                const posthog = getPostHogClient();
+                posthog.capture({
+                    distinctId: submitter || 'anonymous',
+                    event: 'link_added',
+                    properties: {
+                        link_id: id,
+                        link_url: item.url,
+                        link_domain: new URL(item.url).hostname,
+                        submitted_by: submitter,
+                        room_id: roomId,
+                        has_content: !!contentVal,
+                        tags: meta.tags || [],
+                    }
                 });
 
                 // Ensure meta includes canonical URL

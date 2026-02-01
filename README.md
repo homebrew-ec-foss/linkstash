@@ -1,6 +1,12 @@
 # [linkstash.hsp-ec.xyz](https://linkstash.hsp-ec.xyz)
 
-**linkstash** is a small experiment for collecting and sharing interesting links and short notes you find during the week. Here's a lightweight pipeline for forwarding, storing link content using Vercel and Turso.
+**linkstash** is a small experiment for collecting and sharing interesting links and short notes you find during the week.
+
+## Branding & social preview
+
+- **Favicon:** `public/favicon.svg` — uses the **🔗 + 🔥** emoji (replace with your own SVG/ICO if you prefer).
+- **Social preview image:** `public/linkstash-preview.png` — this PNG is used for Open Graph / Twitter previews (recommended ~1200×630). Replace and redeploy to refresh previews.
+
 
 > Built with TypeScript, using [lava](https://github.com/polarhive/lava) and [ash](https://github.com/polarhive/ash).
 
@@ -54,6 +60,10 @@ bunx vercel dev
 - `GET /api/links` - Get all links
 - `GET /api/health` - Health check
 - `GET /api/content/[key]` - Get content by key
+
+## Admin
+
+- `/admin` — simple admin UI to delete links (protected by `AUTH_KEY`). This page lets you enter your `AUTH_KEY` and delete individual links. Deletions call the server (`DELETE /api/admin/link`) and are gated by the same `AUTH_KEY` used for adding links.
 
 ## API examples
 

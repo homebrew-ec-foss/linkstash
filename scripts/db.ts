@@ -183,3 +183,16 @@ export async function getLinkByUrl(url: string): Promise<any | null> {
   const full = Object.assign({ id: row.id as string, ts: row.ts as number, count: row.count as number }, metaObj);
   return sanitizeLink(full);
 }
+
+export async function deleteLinkById(id: string): Promise<boolean> {
+  await initDb();
+  try {
+    // Delete from links; link_index is configured with FK ON DELETE CASCADE, but clean both to be safe
+    await client.execute({ sql: 'DELETE FROM links WHERE id = ?', args: [id] });
+    await client.execute({ sql: 'DELETE FROM link_index WHERE link_id = ?', args: [id] });
+    return true;
+  } catch (e) {
+    console.error('deleteLinkById error', e);
+    return false;
+  }
+}
