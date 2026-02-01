@@ -111,3 +111,54 @@ export async function initDb(): Promise<void> {
 }
 
 export { client };
+
+/**
+ * Server helpers: return link index or a single link by URL so server components
+ * can call these directly (avoid relative fetch() in server runtime).
+ */
+export async function getLinks(): Promise<any[]> {
+  await initDb();
+  const result = await client.execute({
+    sql: `SELECT li.link_id AS id, li.domain, l.submitted_by, li.ts AS ts, l.count, COALESCE(l.meta, li.meta) as meta
+          FROM link_index li
+          LEFT JOIN links l ON l.id = li.link_id
+          ORDER BY li.ts DESC`,
+    args: []
+  });
+
+  return result.rows.map(row => {
+    const metaObj = row.meta ? JSON.parse(row.meta as string) : {};
+    return Object.assign({ id: row.id as string, ts: row.ts as number, count: row.count as number }, metaObj);
+  });
+}
+
+export async function getLinkByUrl(url: string): Promise<any | null> {
+  await initDb();
+
+  const normalizeUrl = (u: any): string => {
+    if (!u || typeof u !== 'string') return '';
+    try {
+      const nu = new URL(u);
+      const path = nu.pathname.replace(/\/+$|^$/, '');
+      return nu.origin + (path || '/') + nu.search;
+    } catch (e) {
+      return (u as string).replace(/\/+$/, '');
+    }
+  };
+
+  const qnorm = normalizeUrl(url);
+
+  const result = await client.execute({
+    sql: `SELECT l.id, l.url, l.domain, l.submitted_by, l.ts, l.count, COALESCE(l.meta, li.meta) as meta
+          FROM link_index li
+          JOIN links l ON l.id = li.link_id
+          WHERE li.normalized_url = ?
+          LIMIT 1`,
+    args: [qnorm]
+  });
+
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  const metaObj = row.meta ? JSON.parse(row.meta as string) : {};
+  return Object.assign({ id: row.id as string, ts: row.ts as number, count: row.count as number }, metaObj);
+}

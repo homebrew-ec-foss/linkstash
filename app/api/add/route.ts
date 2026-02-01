@@ -11,6 +11,20 @@ interface ExistingLinkEntry extends LinkRecord {
     // contentKey removed; content is stored inline
 }
 
+interface AddRequestBody {
+    link: {
+        url: string;
+        submittedBy?: string;
+        submitted_by?: string;
+    } | string;
+    room?: {
+        id?: string;
+        comment?: string;
+        room_id?: string;
+        room_comment?: string;
+    };
+}
+
 export async function POST(request: NextRequest) {
     // Initialize database if needed
     await initDb();
@@ -40,43 +54,64 @@ export async function POST(request: NextRequest) {
 
     // Check auth
     const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith("Bearer ") || authHeader.slice(7) !== process.env.AUTH_KEY) {
+    if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.slice(7) !== process.env.AUTH_KEY) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { link } = body;
+    // Parse JSON body and validate shape
+    let body: AddRequestBody;
+    try {
+        body = await request.json();
+    } catch (e) {
+        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    const { link, room } = body as AddRequestBody;
     if (!link) {
         return NextResponse.json({ error: 'Missing link' }, { status: 400 });
     }
 
-    // who submitted this link (optional)
-    const submitter = (link && (link.submittedBy || link.submitted_by)) || null;
+    // Determine URL and submitter
+    let urlStr: string | null = null;
+    if (typeof link === 'string') {
+        urlStr = link;
+    } else if (link && typeof link.url === 'string') {
+        urlStr = link.url;
+    }
+
+    if (!urlStr) {
+        return NextResponse.json({ error: 'Missing link URL' }, { status: 400 });
+    }
+
+    try {
+        // validate URL
+        // this will throw if invalid
+        new URL(urlStr);
+    } catch (e) {
+        return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
+    }
+
+    const submitter = (typeof link === 'object' && link ? (link.submittedBy || (link as any).submitted_by) : null) || null;
+    const roomId = room ? (room.id || (room as any).room_id) : undefined;
+    const roomComment = room ? (room.comment || (room as any).room_comment) : undefined;
 
     try {
         // Forward to Linkstash API
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (process.env.AUTH_KEY) {
-            headers["Authorization"] = "Bearer " + process.env.AUTH_KEY;
+            headers['Authorization'] = 'Bearer ' + process.env.AUTH_KEY;
         }
 
         // Upstream Linkstash expects simple URL strings in the `links` array.
-        let forwardedLinks: string[] = [];
-        if (typeof link === 'string') {
-            forwardedLinks = [link];
-        } else if (link && typeof link.url === 'string') {
-            forwardedLinks = [link.url];
-        } else {
-            return NextResponse.json({ error: 'Missing link URL' }, { status: 400 });
-        }
+        const forwardedLinks = [urlStr];
 
-        const apiRes = await fetch(process.env.LINKSTASH_BASE_URL! + "/api", {
-            method: "POST",
+        const apiRes = await fetch(process.env.LINKSTASH_BASE_URL! + '/api', {
+            method: 'POST',
             headers: headers,
             body: JSON.stringify({
                 links: forwardedLinks,
-                returnFormat: "json",
-                parser: "jsdom",
+                returnFormat: 'json',
+                parser: 'jsdom',
                 saveToDisk: false
             })
         });
@@ -137,10 +172,25 @@ export async function POST(request: NextRequest) {
                 const entry = existingMap[nurl];
                 const newCount = (entry.count || 1) + 1;
 
-                // Update meta if missing
+                // Merge existing meta with upstream frontmatter when empty
                 let meta = entry.meta || {};
                 if (item.frontmatter && Object.keys(meta).length === 0) {
                     meta = item.frontmatter;
+                }
+
+                // Include submitter and room info in meta
+                if (submitter) {
+                    meta.submittedBy = submitter;
+                } else if (!meta.submittedBy && entry.submittedBy) {
+                    meta.submittedBy = entry.submittedBy;
+                }
+                if (roomId) meta.roomId = roomId;
+                if (roomComment) meta.roomComment = roomComment;
+
+                // Record tags in meta (no separate tag table)
+                const tags = extractTags(item.frontmatter);
+                if (tags.length > 0) {
+                    meta.tags = tags;
                 }
 
                 // Update content inline if provided
@@ -161,20 +211,6 @@ export async function POST(request: NextRequest) {
                     // ignore
                 }
 
-                // Ensure meta contains submitter info and tags
-                if (submitter) {
-                    meta.submittedBy = submitter;
-                } else if (!meta.submittedBy && entry.submittedBy) {
-                    // preserve original submitter if present
-                    meta.submittedBy = entry.submittedBy;
-                }
-
-                // Record tags in meta (no separate tag table)
-                const tags = extractTags(item.frontmatter);
-                if (tags.length > 0) {
-                    meta.tags = tags;
-                }
-
                 // Upsert lightweight index entry for fast lookups
                 try {
                     const domain = (function () { try { return new URL(item.url).hostname } catch (e) { return '' } })();
@@ -188,15 +224,18 @@ export async function POST(request: NextRequest) {
             } else {
                 const id = crypto.randomUUID();
                 const meta = item.frontmatter || {};
+
+                // Ensure submitter & room info recorded in meta
+                if (submitter) {
+                    meta.submittedBy = submitter;
+                }
+                if (roomId) meta.roomId = roomId;
+                if (roomComment) meta.roomComment = roomComment;
+
                 // record tags in meta (replacing separate tag table)
                 const tags = extractTags(item.frontmatter);
                 if (tags.length > 0) {
                     meta.tags = tags;
-                }
-
-                // Ensure submitter is recorded in meta as well
-                if (submitter) {
-                    meta.submittedBy = submitter;
                 }
 
                 const contentVal = item.body || null;

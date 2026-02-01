@@ -1,0 +1,147 @@
+/* Global styles for LinkStash (simple CSS to match the old screenshot) */
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    background: #fafafa;
+    color: #111827;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.28;
+    padding: 8px;
+} 
+
+/* Top bar */
+.topbar {
+    background: #ff6a00;
+    color: #fff;
+    padding: 6px 0;
+    margin-bottom: 10px;
+}
+.topbar .container { font-size: 13px; }
+
+
+.topbar .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.topbar .container .brand {
+    font-weight: 700;
+}
+
+.topbar .container .status {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.95);
+}
+
+/* Layout container */
+.container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 10px;
+} 
+
+.card {
+    background: #fff;
+    border: 1px solid #e6e6e6;
+    border-radius: 6px;
+    padding: 2px 0;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.02);
+} 
+
+h1 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 26px;
+    margin: 2px 0 10px;
+    line-height: 1.05;
+} 
+
+/* Links list */
+ol.link-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+ol.link-list li {
+    display: flex;
+    gap: 8px;
+    padding: 8px 10px;
+    align-items: flex-start;
+    border-bottom: 1px solid #f7f7f7;
+} 
+
+ol.link-list li:last-child {
+    border-bottom: none;
+}
+
+.rank {
+    width: 26px;
+    text-align: right;
+    color: #9ca3af;
+    font-weight: 600;
+    font-size: 13px;
+} 
+
+.link-main {
+    flex: 1;
+}
+
+.link-title {
+    color: #4f46e5;
+    font-weight: 600;
+    text-decoration: none;
+    font-size: 15px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.link-title:hover {
+    text-decoration: underline;
+}
+
+.link-domain {
+    color: #9ca3af;
+    font-size: 12px;
+    margin-top: 3px;
+    display: block;
+} 
+
+.votes {
+    margin-left: 8px;
+    color: #6b7280;
+    font-size: 12px;
+    min-width: 56px;
+    text-align: right;
+    align-self: flex-start;
+    margin-top: 6px;
+} 
+
+/* Fallbacks for very small screens */
+@media (max-width: 480px) {
+    .rank {
+        width: 22px;
+    }
+
+    h1 {
+        font-size: 20px;
+    }
+}
+
+/* Optional: compact card variant */
+.card.compact { padding: 0; border-radius: 4px; }
