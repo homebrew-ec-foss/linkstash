@@ -1,0 +1,33 @@
+{
+  "name": "linkstash",
+  "version": "1.0.0",
+  "description": "A lightweight link collection service",
+  "main": "api/index.js",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "start": "next start",
+    "db:init": "bun run scripts/db-init.ts",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.0",
+    "next": "^16.1.6",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^25.1.0",
+    "@types/react": "^19.2.10",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3",
+    "vercel": "^50.9.6"
+  },
+  "keywords": [
+    "links",
+    "collection",
+    "api"
+  ],
+  "author": "",
+  "license": "MIT"
+}
