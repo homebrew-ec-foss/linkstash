@@ -16,7 +16,7 @@ body {
     font-size: 14px;
     line-height: 1.28;
     padding: 8px;
-} 
+}
 
 /* Top bar */
 .topbar {
@@ -25,7 +25,10 @@ body {
     padding: 6px 0;
     margin-bottom: 10px;
 }
-.topbar .container { font-size: 13px; }
+
+.topbar .container {
+    font-size: 13px;
+}
 
 
 .topbar .container {
@@ -51,7 +54,7 @@ body {
     max-width: 720px;
     margin: 0 auto;
     padding: 0 10px;
-} 
+}
 
 .card {
     background: #fff;
@@ -59,14 +62,14 @@ body {
     border-radius: 6px;
     padding: 2px 0;
     box-shadow: 0 1px 1px rgba(0, 0, 0, 0.02);
-} 
+}
 
 h1 {
     font-family: Georgia, 'Times New Roman', serif;
     font-size: 26px;
     margin: 2px 0 10px;
     line-height: 1.05;
-} 
+}
 
 /* Links list */
 ol.link-list {
@@ -81,7 +84,7 @@ ol.link-list li {
     padding: 8px 10px;
     align-items: flex-start;
     border-bottom: 1px solid #f7f7f7;
-} 
+}
 
 ol.link-list li:last-child {
     border-bottom: none;
@@ -93,7 +96,7 @@ ol.link-list li:last-child {
     color: #9ca3af;
     font-weight: 600;
     font-size: 13px;
-} 
+}
 
 .link-main {
     flex: 1;
@@ -120,7 +123,7 @@ ol.link-list li:last-child {
     font-size: 12px;
     margin-top: 3px;
     display: block;
-} 
+}
 
 .votes {
     margin-left: 8px;
@@ -130,7 +133,7 @@ ol.link-list li:last-child {
     text-align: right;
     align-self: flex-start;
     margin-top: 6px;
-} 
+}
 
 /* Fallbacks for very small screens */
 @media (max-width: 480px) {
@@ -144,4 +147,39 @@ ol.link-list li:last-child {
 }
 
 /* Optional: compact card variant */
-.card.compact { padding: 0; border-radius: 4px; }
+.card.compact {
+    padding: 0;
+    border-radius: 4px;
+}
+
+/* Refresh badge + flash animation used by the client-side list */
+.refresh-badge {
+    background: #eef2ff;
+    color: #3730a3;
+    border-radius: 999px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0.9;
+    transition: transform 180ms ease, opacity 200ms ease;
+}
+
+.refresh-badge.show {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.12);
+}
+
+/* Flash highlight on list refresh */
+@keyframes flash {
+    0% {
+        background: rgba(99, 102, 241, 0.08);
+    }
+
+    100% {
+        background: transparent;
+    }
+}
+
+.link-item.flash {
+    animation: flash 1.6s ease forwards;
+}

@@ -80,7 +80,7 @@ curl "http://localhost:3000/api/content/<key>"
 - Returns the saved `content` (plain text / markdown) for the given link `id`.
 - If not found you'll get a JSON `404` response: `{ "error": "Not found" }`.
 
-> Note: `/api/links` is a lightweight index and returns the link `meta` fields directly (spread into the response). It does **not** include the full `content`. Use `/api/content/<key>` to fetch the stored markdown or content for a link.
+> Note: `/api/links` is a lightweight index and returns the link `meta` fields directly (spread into the response). It does **not** include the full `content`. Sensitive fields such as submitter identifiers (`submittedBy`) and room identifiers (`roomId`) are stripped from API responses, but room comments (`roomComment`) are preserved and included in responses. Use `/api/content/<key>` to fetch the stored markdown or content for a link.
 
 ### Get metadata by URL (GET)
 

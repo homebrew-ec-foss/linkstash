@@ -116,6 +116,25 @@ export { client };
  * Server helpers: return link index or a single link by URL so server components
  * can call these directly (avoid relative fetch() in server runtime).
  */
+
+function sanitizeLink(obj: any): any {
+  const out = { ...obj };
+  // remove sensitive fields that should never be exposed via public APIs
+  delete out.submittedBy;
+  delete out.roomId;
+  // keep room comments; they're useful context and are intended to be public-facing
+  delete out.submitted_by;
+  delete out.room_id;
+  if (out.meta && typeof out.meta === 'object') {
+    delete out.meta.submittedBy;
+    delete out.meta.roomId;
+    // preserve meta.roomComment
+    delete out.meta.submitted_by;
+    delete out.meta.room_id;
+  }
+  return out;
+}
+
 export async function getLinks(): Promise<any[]> {
   await initDb();
   const result = await client.execute({
@@ -128,7 +147,8 @@ export async function getLinks(): Promise<any[]> {
 
   return result.rows.map(row => {
     const metaObj = row.meta ? JSON.parse(row.meta as string) : {};
-    return Object.assign({ id: row.id as string, ts: row.ts as number, count: row.count as number }, metaObj);
+    const full = Object.assign({ id: row.id as string, ts: row.ts as number, count: row.count as number }, metaObj);
+    return sanitizeLink(full);
   });
 }
 
@@ -160,5 +180,6 @@ export async function getLinkByUrl(url: string): Promise<any | null> {
   if (result.rows.length === 0) return null;
   const row = result.rows[0];
   const metaObj = row.meta ? JSON.parse(row.meta as string) : {};
-  return Object.assign({ id: row.id as string, ts: row.ts as number, count: row.count as number }, metaObj);
+  const full = Object.assign({ id: row.id as string, ts: row.ts as number, count: row.count as number }, metaObj);
+  return sanitizeLink(full);
 }
