@@ -96,16 +96,22 @@ export async function POST(request: NextRequest) {
     const roomComment = room ? (room.comment || (room as any).room_comment) : undefined;
 
     try {
-        // Forward to Linkstash API
+        // Ensure LAVA_URL is configured
+        if (!process.env.LAVA_URL) {
+            console.error('LAVA_URL is not set in environment; cannot forward to lava parser');
+            return NextResponse.json({ error: 'LAVA_URL not configured' }, { status: 502 });
+        }
+
+        // Forward to lava parser API
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (process.env.AUTH_KEY) {
             headers['Authorization'] = 'Bearer ' + process.env.AUTH_KEY;
         }
 
-        // Upstream Linkstash expects simple URL strings in the `links` array.
+        // Upstream lava expects simple URL strings in the `links` array.
         const forwardedLinks = [urlStr];
 
-        const apiRes = await fetch(process.env.LINKSTASH_BASE_URL! + '/api', {
+        const apiRes = await fetch(process.env.LAVA_URL + '/api', {
             method: 'POST',
             headers: headers,
             body: JSON.stringify({
@@ -116,10 +122,10 @@ export async function POST(request: NextRequest) {
             })
         });
 
-        // Guard against non-OK responses from the upstream Linkstash API
+        // Guard against non-OK responses from the upstream lava API
         if (!apiRes.ok) {
             const txt = await apiRes.text();
-            console.error('Linkstash API returned error', apiRes.status, txt);
+            console.error('lava API returned error', apiRes.status, txt);
             if (apiRes.status === 400) {
                 // Provide a clearer message when upstream rejects the link shape
                 return NextResponse.json({ error: 'Upstream rejected link: ensure you are sending a URL string (not an object)', details: txt }, { status: 400 });
@@ -129,7 +135,7 @@ export async function POST(request: NextRequest) {
 
         const data = await apiRes.json();
         if (!Array.isArray(data)) {
-            console.error('Unexpected response shape from Linkstash API:', data);
+            console.error('Unexpected response shape from lava API:', data);
             return NextResponse.json({ error: 'Invalid response from upstream' }, { status: 502 });
         }
 
