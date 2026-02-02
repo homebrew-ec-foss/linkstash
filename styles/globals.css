@@ -572,7 +572,6 @@ ol.link-list li:last-child {
 
 .reader-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
     padding: 12px 16px;
     border-bottom: 1px solid var(--border);
@@ -580,6 +579,31 @@ ol.link-list li:last-child {
     top: 0;
     background: linear-gradient(to bottom, rgba(0, 0, 0, 0.02), transparent);
     z-index: 2;
+}
+
+.reader-status {
+    display: flex;
+    gap: 6px;
+    margin-left: 12px;
+}
+
+.status-badge {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-badge.offline {
+    background: #ef4444;
+    color: white;
+}
+
+.status-badge.cached {
+    background: #f59e0b;
+    color: white;
 }
 
 .reader-nav {
@@ -635,10 +659,15 @@ ol.link-list li:last-child {
     display: none !important;
 }
 
+.reader-controls {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
 .reader-controls button,
 .reader-controls .reader-open-link,
 .reader-controls button[aria-label="Close"] {
-    margin-left: 8px;
     padding: 6px 10px;
     border-radius: 6px;
     border: 1px solid var(--border);

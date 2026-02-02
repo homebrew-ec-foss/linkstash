@@ -7,9 +7,9 @@ export const metadata: Metadata = {
     description: 'linkstash is a small experiment for collecting and sharing interesting links and articles you find during the week',
     metadataBase: new URL('https://linkstash.hsp-ec.xyz'),
     icons: {
-        icon: '/favicon.svg',
-        shortcut: '/favicon.svg',
-        apple: '/favicon.svg',
+        icon: '/favicon.png',
+        shortcut: '/favicon.png',
+        apple: '/favicon.png',
     },
     openGraph: {
         title: 'HSP Linkstash',
@@ -38,7 +38,7 @@ export default function RootLayout({
                 <link rel="preconnect" href="https://fonts.googleapis.com" />
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
                 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
-                <link rel="icon" href="/favicon.svg" />
+                <link rel="icon" href="/favicon.png" />
                 <link rel="manifest" href="/manifest.json" />
                 <meta name="theme-color" content="#0f172a" />
             </head>

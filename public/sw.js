@@ -9,7 +9,7 @@ self.addEventListener('install', (event) => {
             // Cache the shell and a few assets
             return cache.addAll([
                 '/',
-                '/favicon.svg',
+                '/favicon.png',
                 '/manifest.json',
                 '/linkstash-preview.png'
             ].filter(Boolean));

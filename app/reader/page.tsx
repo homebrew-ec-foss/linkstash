@@ -14,11 +14,26 @@ export default function ReaderPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [metas, setMetas] = useState<Record<string, any>>({});
+    const [isFromCache, setIsFromCache] = useState(false);
+    const [isOnline, setIsOnline] = useState(true);
     const router = useRouter();
 
     const touchStartX = useRef<number | null>(null);
     const touchStartY = useRef<number | null>(null);
     const touchStartTime = useRef<number | null>(null);
+
+    // Online/offline detection
+    useEffect(() => {
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        setIsOnline(navigator.onLine);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
 
     // Parse hash and build queue: if single id is provided, fetch /api/links to build full list and set index
     useEffect(() => {
@@ -113,15 +128,7 @@ export default function ReaderPage() {
                         const parsed = JSON.parse(cached) as { ts: number; content: string };
                         if (parsed && parsed.content) {
                             setContent(parsed.content);
-                            try {
-                                const s = localStorage.getItem(`reader:meta:${id}`);
-                                if (s) {
-                                    const m = JSON.parse(s);
-                                    setMetas((prev) => ({ ...(prev || {}), [id]: m }));
-                                }
-                            } catch (err) {
-                                // ignore parse/localStorage errors
-                            }
+                            setIsFromCache(true);
                         }
                     } catch (err) {
                         // ignore parse errors
@@ -145,6 +152,7 @@ export default function ReaderPage() {
                 if (!cancelled) {
                     // If we had a cached copy and it differs, update UI
                     if (txt !== content) setContent(txt);
+                    setIsFromCache(false);
 
                     // Persist only content to localStorage; update links_cache entry title if helpful
                     try {
@@ -349,6 +357,10 @@ export default function ReaderPage() {
 
                     <div className="reader-header">
                         <div className="reader-title">{currentMeta?.url ? (<a href={currentMeta.url} target="_blank" rel="noopener noreferrer" className="reader-header-link">{new URL(currentMeta.url).hostname}</a>) : (currentMeta?.title || 'Reader')}</div>
+                        <div className="reader-status">
+                            {!isOnline && <span className="status-badge offline">Offline</span>}
+                            {isFromCache && <span className="status-badge cached">Cached</span>}
+                        </div>
                         <div className="reader-controls">
                             {currentMeta?.url && (<a href={currentMeta.url} target="_blank" rel="noopener noreferrer" className="reader-open-link">Open</a>)}
                             <button type="button" onClick={() => router.back()} aria-label="Close">Close</button>
