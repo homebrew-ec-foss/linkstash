@@ -2,12 +2,16 @@
 
 **linkstash** is a small experiment for collecting and sharing interesting links and short notes you find during the week.
 
-> Usses [lava](https://github.com/polarhive/lava) and [ash](https://github.com/polarhive/ash).
+> Previously we used a self‑hosted parser (`lava`), but the service now leverages the public
+> [defuddle.md](https://defuddle.md) converter.  Append any URL as a path component
+> (e.g. `curl https://defuddle.md/stephango.com`) and you'll get back Markdown with
+> YAML frontmatter.
 
 ## How it works
 
 1. `ash` detects links posted to a WhatsApp group (bridged to Matrix) and forwards them to the Vercel API.
-2. `linkstash` calls `lava` and stores the markdown + rich frontmatter in Turso
+2. `linkstash` calls the Markdown parser (`defuddle.md` by default) and stores the markdown +
+   rich frontmatter in Turso
 3. The Vercel app lists saved links and renders the parsed Markdown in a Hacker News–style feed.
 
 ## Quick start
@@ -23,6 +27,10 @@ bunx vercel dev
 - `AUTH_KEY`: Your authentication key
 - `TURSO_DATABASE_URL`: Your Turso database URL
 - `TURSO_AUTH_TOKEN`: Your Turso auth token
+
+> The old `LAVA_URL` variable is no longer required; the service will hit
+> `https://defuddle.md/` automatically.  You may still set `LAVA_URL` if you
+> want to override the parser for testing or backwards compatibility.
 
 
 ## API Endpoints

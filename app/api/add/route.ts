@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { client, initDb, LinkRecord } from '../../../scripts/db';
 import { getPostHogClient } from '../../../lib/posthog-server';
+import YAML from 'js-yaml';
+
 
 interface ExistingLinkEntry extends LinkRecord {
 }
@@ -90,47 +92,85 @@ export async function POST(request: NextRequest) {
     const roomComment = room ? (room.comment || (room as any).room_comment) : undefined;
 
     try {
-        // Ensure LAVA_URL is configured
-        if (!process.env.LAVA_URL) {
-            console.error('LAVA_URL is not set in environment; cannot forward to lava parser');
-            return NextResponse.json({ error: 'LAVA_URL not configured' }, { status: 502 });
-        }
+        // if an old-style LAVA_URL is configured we'll still send to that service
+        // for backwards compatibility; otherwise use the new `defuddle.md` public
+        // converter which simply returns the page as Markdown with YAML
+        // frontmatter when you append the target URL to the path.
+        const parseLink = async (linkUrl: string) => {
+            // helper that returns the shape expected by the rest of the handler
+            // ({url, frontmatter, body})
+            if (process.env.LAVA_URL) {
+                // old behaviour: forward to lava
+                const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                if (process.env.AUTH_KEY) {
+                    headers['Authorization'] = 'Bearer ' + process.env.AUTH_KEY;
+                }
+                const apiRes = await fetch(process.env.LAVA_URL + '/api', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        links: [linkUrl],
+                        returnFormat: 'json',
+                        parser: 'jsdom',
+                        saveToDisk: false
+                    })
+                });
 
-        // Forward to lava parser API
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (process.env.AUTH_KEY) {
-            headers['Authorization'] = 'Bearer ' + process.env.AUTH_KEY;
-        }
-
-        // Upstream lava expects simple URL strings in the `links` array.
-        const forwardedLinks = [urlStr];
-
-        const apiRes = await fetch(process.env.LAVA_URL + '/api', {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify({
-                links: forwardedLinks,
-                returnFormat: 'json',
-                parser: 'jsdom',
-                saveToDisk: false
-            })
-        });
-
-        // Guard against non-OK responses from the upstream lava API
-        if (!apiRes.ok) {
-            const txt = await apiRes.text();
-            console.error('lava API returned error', apiRes.status, txt);
-            if (apiRes.status === 400) {
-                // Provide a clearer message when upstream rejects the link shape
-                return NextResponse.json({ error: 'Upstream rejected link: ensure you are sending a URL string (not an object)', details: txt }, { status: 400 });
+                if (!apiRes.ok) {
+                    const txt = await apiRes.text();
+                    console.error('lava API returned error', apiRes.status, txt);
+                    if (apiRes.status === 400) {
+                        throw new Error('upstream-rejected:' + txt);
+                    }
+                    throw new Error('upstream-error:' + apiRes.status + ':' + txt);
+                }
+                const arr = await apiRes.json();
+                if (!Array.isArray(arr) || arr.length === 0) {
+                    throw new Error('invalid-upstream-response');
+                }
+                return arr[0];
             }
-            return NextResponse.json({ error: 'Upstream error', status: apiRes.status, details: txt }, { status: 502 });
-        }
 
-        const data = await apiRes.json();
-        if (!Array.isArray(data)) {
-            console.error('Unexpected response shape from lava API:', data);
-            return NextResponse.json({ error: 'Invalid response from upstream' }, { status: 502 });
+            // new default behaviour: call public defuddle.md converter.
+            const target = encodeURIComponent(linkUrl);
+            const apiRes = await fetch('https://defuddle.md/' + target);
+            if (!apiRes.ok) {
+                const txt = await apiRes.text();
+                console.error('defuddle.md returned error', apiRes.status, txt);
+                throw new Error('upstream-error:' + apiRes.status + ':' + txt);
+            }
+            const text = await apiRes.text();
+            // split YAML frontmatter if present
+            let frontmatter: any = {};
+            let body = text;
+            if (text.startsWith('---')) {
+                const parts = text.split('---');
+                // parts[0] is empty, [1] is yaml, rest is body
+                if (parts.length >= 3) {
+                    try {
+                        frontmatter = YAML.load(parts[1]) || {};
+                    } catch (e) {
+                        console.warn('failed to parse yaml frontmatter', e);
+                        frontmatter = {};
+                    }
+                    body = parts.slice(2).join('---').trim();
+                }
+            }
+            return { url: linkUrl, frontmatter, body };
+        };
+
+        // fetch / parse the URL using whichever parser is active
+        let data;
+        try {
+            const item = await parseLink(urlStr);
+            data = [item];
+        } catch (err: any) {
+            const message = String(err.message || err);
+            if (message.startsWith('upstream-rejected:')) {
+                return NextResponse.json({ error: 'Upstream rejected link: ensure you are sending a URL string (not an object)', details: message.replace(/^upstream-rejected:/, '') }, { status: 400 });
+            }
+            console.error('parser error', message);
+            return NextResponse.json({ error: 'Upstream error', details: message }, { status: 502 });
         }
 
         // Build a map of existing normalized URLs
