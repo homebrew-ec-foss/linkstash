@@ -7,6 +7,21 @@ import rehypeSanitize from 'rehype-sanitize';
 import { useRouter } from 'next/navigation';
 import posthog from 'posthog-js';
 
+type SuggestedItem = {
+    id: string;
+    url: string;
+    domain: string;
+    title: string;
+    roomComment: string;
+    count: number;
+    score: number;
+};
+
+type SuggestedGroup = {
+    name: string;
+    count: number;
+};
+
 export default function ReaderPage() {
     const [queue, setQueue] = useState<string[]>([]);
     const [index, setIndex] = useState(0);
@@ -16,6 +31,9 @@ export default function ReaderPage() {
     const [metas, setMetas] = useState<Record<string, any>>({});
     const [isFromCache, setIsFromCache] = useState(false);
     const [isOnline, setIsOnline] = useState(true);
+    const [relatedItems, setRelatedItems] = useState<SuggestedItem[]>([]);
+    const [relatedGroups, setRelatedGroups] = useState<SuggestedGroup[]>([]);
+    const [relatedLoading, setRelatedLoading] = useState(false);
     const router = useRouter();
 
     const touchStartX = useRef<number | null>(null);
@@ -300,6 +318,38 @@ export default function ReaderPage() {
     const currentId = queue[index];
     const currentMeta = currentId ? metas[currentId] : null;
 
+    useEffect(() => {
+        if (!currentId) {
+            setRelatedItems([]);
+            setRelatedGroups([]);
+            return;
+        }
+
+        let cancelled = false;
+        (async () => {
+            setRelatedLoading(true);
+            try {
+                const res = await fetch(`/api/related/${encodeURIComponent(currentId)}`);
+                if (!res.ok) return;
+                const payload = await res.json();
+                if (cancelled) return;
+                setRelatedItems(Array.isArray(payload.related) ? payload.related : []);
+                setRelatedGroups(Array.isArray(payload.groups) ? payload.groups : []);
+            } catch (e) {
+                if (!cancelled) {
+                    setRelatedItems([]);
+                    setRelatedGroups([]);
+                }
+            } finally {
+                if (!cancelled) setRelatedLoading(false);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [currentId]);
+
     // Ensure every rendered page has an H1: prefer meta title, then hostname (from URL), then id, then a generic fallback
     const defaultH1Text = (() => {
         if (currentMeta?.title) return currentMeta.title;
@@ -376,75 +426,111 @@ export default function ReaderPage() {
                         </div>
                     </div>
 
-                    <div className="reader-content">
-                        {loading ? (
-                            <div className="p-6 text-center text-gray-500">Loading…</div>
-                        ) : error ? (
-                            <div className="p-6 text-center text-gray-500">{error}</div>
-                        ) : content ? (
-                            <article className="markdown-body">
-                                {/* Always render a single H1: prefer the extracted H1 from content, otherwise fallback to pageH1 */}
-                                <h1 className="markdown-title">{pageH1}</h1>
-                                <ReactMarkdown
-                                    remarkPlugins={[remarkGfm]}
-                                    rehypePlugins={[rehypeSanitize]}
-                                    components={{
-                                        img: ({ node, src, alt, title }) => {
-                                            // Helper to extract YouTube ID
-                                            const getYouTubeId = (url: string | undefined) => {
-                                                if (!url) return null;
-                                                try {
-                                                    const u = new URL(url);
-                                                    if (u.hostname === 'youtu.be') {
-                                                        return u.pathname.slice(1);
+                    <div className="reader-content reader-content-with-suggestions">
+                        <div className="reader-article-col">
+                            {loading ? (
+                                <div className="p-6 text-center text-gray-500">Loading…</div>
+                            ) : error ? (
+                                <div className="p-6 text-center text-gray-500">{error}</div>
+                            ) : content ? (
+                                <article className="markdown-body">
+                                    {/* Always render a single H1: prefer the extracted H1 from content, otherwise fallback to pageH1 */}
+                                    <h1 className="markdown-title">{pageH1}</h1>
+                                    <ReactMarkdown
+                                        remarkPlugins={[remarkGfm]}
+                                        rehypePlugins={[rehypeSanitize]}
+                                        components={{
+                                            img: ({ node, src, alt, title }) => {
+                                                // Helper to extract YouTube ID
+                                                const getYouTubeId = (url: string | undefined) => {
+                                                    if (!url) return null;
+                                                    try {
+                                                        const u = new URL(url);
+                                                        if (u.hostname === 'youtu.be') {
+                                                            return u.pathname.slice(1);
+                                                        }
+                                                        if (u.hostname === 'www.youtube.com' || u.hostname === 'youtube.com' || u.hostname.endsWith('.youtube.com')) {
+                                                            const v = u.searchParams.get('v');
+                                                            if (v) return v;
+                                                            const parts = u.pathname.split('/').filter(Boolean);
+                                                            if (parts[0] === 'shorts' && parts[1]) return parts[1];
+                                                        }
+                                                        return null;
+                                                    } catch (e) {
+                                                        return null;
                                                     }
-                                                    if (u.hostname === 'www.youtube.com' || u.hostname === 'youtube.com' || u.hostname.endsWith('.youtube.com')) {
-                                                        const v = u.searchParams.get('v');
-                                                        if (v) return v;
-                                                        const parts = u.pathname.split('/').filter(Boolean);
-                                                        if (parts[0] === 'shorts' && parts[1]) return parts[1];
-                                                    }
-                                                    return null;
-                                                } catch (e) {
-                                                    return null;
-                                                }
-                                            };
+                                                };
 
-                                            const id = getYouTubeId(src as string | undefined);
-                                            if (id) {
-                                                const embed = `https://www.youtube.com/embed/${id}`;
+                                                const id = getYouTubeId(src as string | undefined);
+                                                if (id) {
+                                                    const embed = `https://www.youtube.com/embed/${id}`;
+                                                    return (
+                                                        <div className="embed-youtube">
+                                                            <iframe src={embed} title={alt || title || 'YouTube video'} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                                                        </div>
+                                                    );
+                                                }
+
                                                 return (
-                                                    <div className="embed-youtube">
-                                                        <iframe src={embed} title={alt || title || 'YouTube video'} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
-                                                    </div>
+                                                    <img
+                                                        src={src}
+                                                        alt={alt}
+                                                        title={title}
+                                                        className="markdown-img"
+                                                        onError={(e: any) => {
+                                                            try {
+                                                                const t = e.currentTarget as HTMLImageElement;
+                                                                if (t.dataset && t.dataset.proxied) return;
+                                                                t.dataset.proxied = '1';
+                                                                t.src = `/api/proxy?url=${encodeURIComponent(String(src || ''))}`;
+                                                            } catch (err) {
+                                                                // ignore
+                                                            }
+                                                        }}
+                                                    />
                                                 );
                                             }
+                                        }}
+                                    >{contentWithoutH1}</ReactMarkdown>
+                                </article>
+                            ) : (
+                                <div className="p-6 text-center text-gray-500">No content.</div>
+                            )}
+                        </div>
 
-                                            return (
-                                                <img
-                                                    src={src}
-                                                    alt={alt}
-                                                    title={title}
-                                                    className="markdown-img"
-                                                    onError={(e: any) => {
-                                                        try {
-                                                            const t = e.currentTarget as HTMLImageElement;
-                                                            if (t.dataset && t.dataset.proxied) return;
-                                                            t.dataset.proxied = '1';
-                                                            t.src = `/api/proxy?url=${encodeURIComponent(String(src || ''))}`;
-                                                        } catch (err) {
-                                                            // ignore
-                                                        }
-                                                    }}
-                                                />
-                                            );
-                                        }
-                                    }}
-                                >{contentWithoutH1}</ReactMarkdown>
-                            </article>
-                        ) : (
-                            <div className="p-6 text-center text-gray-500">No content.</div>
-                        )}
+                        <aside className="reader-suggestions-side" aria-label="Suggested articles and groups">
+                            <div className="suggestion-section-title">Suggested Articles</div>
+                            {relatedLoading ? (
+                                <div className="suggestion-empty">Finding related links...</div>
+                            ) : relatedItems.length === 0 ? (
+                                <div className="suggestion-empty">No related links yet.</div>
+                            ) : (
+                                <ol className="suggestion-list">
+                                    {relatedItems.slice(0, 10).map((item) => (
+                                        <li key={item.id}>
+                                            <a href={`/reader/${encodeURIComponent(item.id)}`} className="suggestion-link">
+                                                <span className="suggestion-title">{item.title}</span>
+                                                <span className="suggestion-meta">{item.domain || 'unknown domain'} • {Math.round(item.score * 100)}%</span>
+                                            </a>
+                                        </li>
+                                    ))}
+                                </ol>
+                            )}
+
+                            <div className="suggestion-section-title">Suggested Groups</div>
+                            {relatedGroups.length === 0 ? (
+                                <div className="suggestion-empty">No groups available.</div>
+                            ) : (
+                                <ul className="suggestion-group-list">
+                                    {relatedGroups.slice(0, 8).map((group) => (
+                                        <li key={group.name}>
+                                            <span>{group.name}</span>
+                                            <strong>{group.count}</strong>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </aside>
                     </div>
                 </div>
 

@@ -8,6 +8,17 @@ import rehypeSanitize from 'rehype-sanitize';
 import posthog from 'posthog-js';
 
 type LinkItem = any;
+type SuggestedItem = {
+    id: string;
+    url: string;
+    domain: string;
+    title: string;
+    score: number;
+};
+type SuggestedGroup = {
+    name: string;
+    count: number;
+};
 
 type RankMode = 'latest' | 'top' | 'rising';
 
@@ -54,6 +65,11 @@ export default function LinksClient() {
     const [rankMode, setRankMode] = useState<RankMode>('latest');
     const [loading, setLoading] = useState(true);
     const [refreshed, setRefreshed] = useState(false);
+    const [suggestedItems, setSuggestedItems] = useState<SuggestedItem[]>([]);
+    const [suggestedGroups, setSuggestedGroups] = useState<SuggestedGroup[]>([]);
+    const [suggestedLoading, setSuggestedLoading] = useState(false);
+    const [suggestedSourceTitle, setSuggestedSourceTitle] = useState('');
+    const [suggestionsExpanded, setSuggestionsExpanded] = useState(false);
 
     // Reader state
     const [readerOpen, setReaderOpen] = useState(false);
@@ -116,6 +132,42 @@ export default function LinksClient() {
 
         return () => { cancelled = true };
     }, [rankMode]);
+
+    useEffect(() => {
+        const source = (links || []).find((x: any) => x?.id);
+        if (!source?.id) {
+            setSuggestedItems([]);
+            setSuggestedGroups([]);
+            setSuggestedSourceTitle('');
+            return;
+        }
+
+        setSuggestedSourceTitle(source.title || source.name || source.meta?.title || source.url || 'Top link');
+
+        let cancelled = false;
+        (async () => {
+            setSuggestedLoading(true);
+            try {
+                const res = await fetch(`/api/related/${encodeURIComponent(String(source.id))}`);
+                if (!res.ok) return;
+                const payload = await res.json();
+                if (cancelled) return;
+                setSuggestedItems(Array.isArray(payload.related) ? payload.related : []);
+                setSuggestedGroups(Array.isArray(payload.groups) ? payload.groups : []);
+            } catch (e) {
+                if (!cancelled) {
+                    setSuggestedItems([]);
+                    setSuggestedGroups([]);
+                }
+            } finally {
+                if (!cancelled) setSuggestedLoading(false);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [links, rankMode]);
 
     // Helper: load content for a queue index
     async function loadContentAt(index: number) {
@@ -519,6 +571,60 @@ export default function LinksClient() {
             </div>
 
             <div>
+                <div className="home-suggestions-toggle-wrap">
+                    <button
+                        type="button"
+                        className="home-suggestions-toggle"
+                        aria-expanded={suggestionsExpanded}
+                        onClick={() => setSuggestionsExpanded((v) => !v)}
+                    >
+                        {suggestionsExpanded ? 'Hide suggestions' : 'Show suggestions'}
+                    </button>
+                </div>
+
+                {suggestionsExpanded ? (
+                    <div className="home-suggestions-panel" aria-label="Homepage suggested content">
+                        <div className="home-suggestions-col">
+                            <div className="home-suggestions-title">Suggested Articles</div>
+                            {suggestedSourceTitle ? (
+                                <div className="home-suggestions-subtitle">Based on: {suggestedSourceTitle}</div>
+                            ) : null}
+                            {suggestedLoading ? (
+                                <div className="suggestion-empty">Finding related links...</div>
+                            ) : suggestedItems.length === 0 ? (
+                                <div className="suggestion-empty">No related links yet.</div>
+                            ) : (
+                                <ol className="suggestion-list">
+                                    {suggestedItems.slice(0, 6).map((item) => (
+                                        <li key={item.id}>
+                                            <a href={`/reader/${encodeURIComponent(item.id)}`} className="suggestion-link">
+                                                <span className="suggestion-title">{item.title}</span>
+                                                <span className="suggestion-meta">{item.domain || 'unknown domain'} • {Math.round((item.score || 0) * 100)}%</span>
+                                            </a>
+                                        </li>
+                                    ))}
+                                </ol>
+                            )}
+                        </div>
+
+                        <div className="home-suggestions-col">
+                            <div className="home-suggestions-title">Suggested Groups</div>
+                            {suggestedGroups.length === 0 ? (
+                                <div className="suggestion-empty">No groups available.</div>
+                            ) : (
+                                <ul className="suggestion-group-list">
+                                    {suggestedGroups.slice(0, 6).map((group) => (
+                                        <li key={group.name}>
+                                            <span>{group.name}</span>
+                                            <strong>{group.count}</strong>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    </div>
+                ) : null}
+
                 {groups.map((g) => (
                     <div key={g.key} className="date-group">
                         <div className="date-heading">{g.label}</div>

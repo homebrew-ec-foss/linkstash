@@ -19,6 +19,8 @@ const client: Client = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN!,
 });
 
+let attemptedVectorIndexInit = false;
+
 // Initialize database schema
 export async function initDb(): Promise<void> {
   await client.execute(`
@@ -59,6 +61,34 @@ export async function initDb(): Promise<void> {
   await client.execute(`
     CREATE INDEX IF NOT EXISTS idx_link_index_normalized_url ON link_index(normalized_url)
   `);
+
+  // Embeddings table used for semantic recommendations in reader view.
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS link_embeddings (
+      link_id TEXT PRIMARY KEY,
+      embedding F32_BLOB(${128}) NOT NULL,
+      source_hash TEXT NOT NULL,
+      ts INTEGER NOT NULL,
+      FOREIGN KEY (link_id) REFERENCES links(id) ON DELETE CASCADE
+    )
+  `);
+
+  await client.execute(`
+    CREATE INDEX IF NOT EXISTS idx_link_embeddings_ts ON link_embeddings(ts DESC)
+  `);
+
+  // Vector index can fail on older engines; reader API has a safe fallback path.
+  if (!attemptedVectorIndexInit) {
+    attemptedVectorIndexInit = true;
+    try {
+      await client.execute(`
+        CREATE INDEX IF NOT EXISTS idx_link_embeddings_vec
+        ON link_embeddings(libsql_vector_idx(embedding))
+      `);
+    } catch (e) {
+      console.warn('vector index not available for link_embeddings, using scan fallback', e);
+    }
+  }
 
   // Migrate old link_index (if it had a `url` column) into the new schema by
   // moving url into meta.url (if not already present).
