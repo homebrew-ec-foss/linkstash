@@ -336,10 +336,10 @@ export default function LinksClient() {
                             className="reader-header-button"
                             title="Open reading view"
                             onClick={() => {
-                                // Open only the first available stored content id (single id in hash)
+                                // Open only the first available stored content id.
                                 const firstId = (links || []).find((x) => x.id)?.id;
                                 if (firstId) {
-                                    window.location.href = `/reader#${firstId}`;
+                                    window.location.href = `/reader/${encodeURIComponent(firstId)}`;
                                 } else {
                                     // fallback: open first external url
                                     const firstUrl = (links || []).find((x) => x.url || (x.meta && x.meta.url));
@@ -487,10 +487,10 @@ export default function LinksClient() {
                             posthog.capture('reader_opened', {
                                 total_links: (links || []).length,
                             });
-                            // Open only the first available stored content id (single id in hash)
+                            // Open only the first available stored content id.
                             const firstId = (links || []).find((x) => x.id)?.id;
                             if (firstId) {
-                                window.location.href = `/reader#${firstId}`;
+                                window.location.href = `/reader/${encodeURIComponent(firstId)}`;
                             } else {
                                 const firstUrl = (links || []).find((x) => x.url || (x.meta && x.meta.url));
                                 if (firstUrl && (firstUrl.url || (firstUrl.meta && firstUrl.meta.url))) {

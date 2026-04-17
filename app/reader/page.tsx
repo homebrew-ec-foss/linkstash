@@ -35,11 +35,16 @@ export default function ReaderPage() {
         };
     }, []);
 
-    // Parse hash and build queue: if single id is provided, fetch /api/links to build full list and set index
+    // Parse location and build queue: prefer /reader/:id, fallback to legacy hash style.
     useEffect(() => {
-        const readHash = async () => {
+        const readLocation = async () => {
+            const pathMatch = window.location.pathname.match(/^\/reader\/([^\/]+)$/);
+            const pathId = pathMatch?.[1] ? decodeURIComponent(pathMatch[1]) : '';
+
             const h = (window.location.hash || '').replace(/^#/, '');
-            const ids = h.split(',').map((s) => s.trim()).filter(Boolean);
+            const hashIds = h.split(',').map((s) => s.trim()).filter(Boolean);
+
+            const ids = pathId ? [pathId] : hashIds;
 
             if (ids.length === 0) {
                 setQueue([]);
@@ -75,9 +80,13 @@ export default function ReaderPage() {
             }
         };
 
-        readHash();
-        window.addEventListener('hashchange', readHash);
-        return () => window.removeEventListener('hashchange', readHash);
+        readLocation();
+        window.addEventListener('hashchange', readLocation);
+        window.addEventListener('popstate', readLocation);
+        return () => {
+            window.removeEventListener('hashchange', readLocation);
+            window.removeEventListener('popstate', readLocation);
+        };
     }, []);
 
     // Load meta data for queue items from the stored links cache (links_cache)
@@ -222,11 +231,11 @@ export default function ReaderPage() {
         setIndex(newIndex);
     }
 
-    // Update URL so current item is the single id in the hash (easier bookmarking)
+    // Keep canonical path URL in sync with the current item.
     useEffect(() => {
         if (!queue || queue.length === 0) return;
         const current = queue[index];
-        if (current) history.replaceState(null, '', `/reader#${current}`);
+        if (current) history.replaceState(null, '', `/reader/${encodeURIComponent(current)}`);
     }, [index, queue]);
 
     // Keyboard support
@@ -285,7 +294,7 @@ export default function ReaderPage() {
         setQueue(q);
         setIndex(newIndex);
         // update URL to current single id
-        history.replaceState(null, '', `/reader#${q[newIndex]}`);
+        history.replaceState(null, '', `/reader/${encodeURIComponent(q[newIndex])}`);
     }
 
     const currentId = queue[index];
