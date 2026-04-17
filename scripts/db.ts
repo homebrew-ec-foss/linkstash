@@ -138,7 +138,7 @@ function sanitizeLink(obj: any): any {
 export async function getLinks(): Promise<any[]> {
   await initDb();
   const result = await client.execute({
-    sql: `SELECT li.link_id AS id, li.domain, l.submitted_by, li.ts AS ts, l.count, COALESCE(l.meta, li.meta) as meta
+    sql: `SELECT li.link_id AS id, li.domain, l.url AS url, l.submitted_by, li.ts AS ts, l.count, COALESCE(l.meta, li.meta) as meta
           FROM link_index li
           LEFT JOIN links l ON l.id = li.link_id
           ORDER BY li.ts DESC`,
@@ -147,7 +147,10 @@ export async function getLinks(): Promise<any[]> {
 
   return result.rows.map(row => {
     const metaObj = row.meta ? JSON.parse(row.meta as string) : {};
-    const full = Object.assign({ id: row.id as string, ts: row.ts as number, count: row.count as number }, metaObj);
+    // start with fields from the row; allow meta.url to override the raw url
+    const base: any = { id: row.id as string, ts: row.ts as number, count: row.count as number };
+    if (row.url) base.url = row.url as string;
+    const full = Object.assign(base, metaObj);
     return sanitizeLink(full);
   });
 }
@@ -180,7 +183,9 @@ export async function getLinkByUrl(url: string): Promise<any | null> {
   if (result.rows.length === 0) return null;
   const row = result.rows[0];
   const metaObj = row.meta ? JSON.parse(row.meta as string) : {};
-  const full = Object.assign({ id: row.id as string, ts: row.ts as number, count: row.count as number }, metaObj);
+  const base: any = { id: row.id as string, ts: row.ts as number, count: row.count as number };
+  if (row.url) base.url = row.url as string;
+  const full = Object.assign(base, metaObj);
   return sanitizeLink(full);
 }
 

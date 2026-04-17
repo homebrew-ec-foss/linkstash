@@ -84,24 +84,37 @@ curl "https://linkstash.hsp-ec.xyz/api/links?url=https://example.com"
 
 ### GET /api/summary
 
-Retrieves a summary of links for a specific day.
+Retrieves a summary of links for a date range.
 
 #### Query Parameters
 
-- `day` (optional): Date in `YYYY-MM-DD` format. If not provided, defaults to the most recent date that has links.
+- `from` (optional): Start date in `YYYY-MM-DD` format
+- `to` (optional): End date in `YYYY-MM-DD` format
+- `room` (optional): Room name/comment filter (case-insensitive)
+
+Notes:
+- If `from`/`to` are omitted, the API defaults to the latest 7-day window with links.
+- `day` is still accepted for backwards compatibility and is treated as `from=day&to=day`.
 
 #### Response
 
 Returns a JSON object with:
-- `day`: The date used for the summary (string)
-- `summary`: Array of links posted on that day (same format as `/api/links`)
+- `from`: Start day used for the summary (string or null)
+- `to`: End day used for the summary (string or null)
+- `room`: Active room filter or `null`
+- `rooms`: Array of available room buckets for the selected date range, with counts
+- `total`: Number of links in `summary`
+- `summary`: Array of links posted in that range (same format as `/api/links`)
 
 #### Example curl commands
 
 ```bash
-# Get summary for the latest day with links
+# Get summary for the default latest 7-day range
 curl "https://linkstash.hsp-ec.xyz/api/summary"
 
-# Get summary for a specific day
-curl "https://linkstash.hsp-ec.xyz/api/summary?day=2023-12-25"
+# Get summary for a specific date range
+curl "https://linkstash.hsp-ec.xyz/api/summary?from=2023-12-20&to=2023-12-25"
+
+# Get summary for a range filtered to one room
+curl "https://linkstash.hsp-ec.xyz/api/summary?from=2023-12-20&to=2023-12-25&room=room%20name"
 ```

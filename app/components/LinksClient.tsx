@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from 'react';
-import { Github, BookOpen } from 'lucide-react';
+import { Github, BookOpen, Filter } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
@@ -343,6 +343,9 @@ export default function LinksClient() {
                         >
                             <BookOpen size={16} aria-hidden="true" />
                         </button>
+                        <a href="/summary" className="summary-button" aria-label="Open summary and room filters">
+                            <Filter size={16} aria-hidden="true" />
+                        </a>
                         <a href="https://github.com/homebrew-ec-foss/linkstash" className="gh-button" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository">
                             <Github size={16} aria-hidden="true" />
                         </a>
@@ -450,6 +453,9 @@ export default function LinksClient() {
                     >
                         <BookOpen size={16} aria-hidden="true" />
                     </button>
+                    <a href="/summary" className="summary-button" aria-label="Open summary and room filters">
+                        <Filter size={16} aria-hidden="true" />
+                    </a>
                     <a
                         href="https://github.com/homebrew-ec-foss/linkstash"
                         className="gh-button"

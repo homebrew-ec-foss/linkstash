@@ -11,24 +11,24 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@libsql/client": "^0.17.0",
+    "@libsql/client": "^0.17.2",
     "lucide-react": "^0.563.0",
-    "next": "^16.1.6",
-    "posthog-js": "^1.358.0",
-    "posthog-node": "^5.26.2",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
+    "next": "^16.2.4",
+    "posthog-js": "^1.369.2",
+    "posthog-node": "^5.29.2",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
     "react-markdown": "^10.1.0",
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^25.3.3",
+    "@types/node": "^25.6.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "typescript": "^5.9.3",
-    "vercel": "^50.26.1"
+    "vercel": "^50.44.0"
   },
   "keywords": [
     "links",
