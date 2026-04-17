@@ -9,8 +9,16 @@ import posthog from 'posthog-js';
 
 type LinkItem = any;
 
-function sortLinks(list: LinkItem[]) {
-    return list.slice().sort((a: any, b: any) => (b.count || 0) - (a.count || 0) || (b.ts || 0) - (a.ts || 0));
+type RankMode = 'latest' | 'top' | 'rising';
+
+function sortLinks(list: LinkItem[], mode: RankMode) {
+    if (mode === 'top') {
+        return list.slice().sort((a: any, b: any) => (b.count || 0) - (a.count || 0) || (b.ts || 0) - (a.ts || 0));
+    }
+    if (mode === 'rising') {
+        return list.slice().sort((a: any, b: any) => (b.score || 0) - (a.score || 0) || (b.count || 0) - (a.count || 0) || (b.ts || 0) - (a.ts || 0));
+    }
+    return list.slice().sort((a: any, b: any) => (b.ts || 0) - (a.ts || 0) || (b.count || 0) - (a.count || 0));
 }
 
 function formatDateLabel(ts: number | undefined) {
@@ -43,6 +51,7 @@ function groupByDate(list: LinkItem[]) {
 
 export default function LinksClient() {
     const [links, setLinks] = useState<LinkItem[] | null>(null);
+    const [rankMode, setRankMode] = useState<RankMode>('latest');
     const [loading, setLoading] = useState(true);
     const [refreshed, setRefreshed] = useState(false);
 
@@ -63,11 +72,12 @@ export default function LinksClient() {
 
     // Load cached links immediately
     useEffect(() => {
-        const cached = typeof window !== 'undefined' ? localStorage.getItem('links_cache') : null;
+        const cacheKey = `links_cache_${rankMode}`;
+        const cached = typeof window !== 'undefined' ? localStorage.getItem(cacheKey) : null;
         if (cached) {
             try {
                 const parsed = JSON.parse(cached);
-                setLinks(sortLinks(parsed));
+                setLinks(sortLinks(parsed, rankMode));
             } catch (e) {
                 // ignore
             }
@@ -77,11 +87,11 @@ export default function LinksClient() {
         let cancelled = false;
         (async () => {
             try {
-                const res = await fetch('/api/links');
+                const res = await fetch(`/api/links?mode=${rankMode}`);
                 if (!res.ok) return;
                 const data = await res.json();
                 if (cancelled) return;
-                const sorted = sortLinks(data).map((item: any, i: number) => ({ ...item, displayIndex: i + 1 }));
+                const sorted = sortLinks(data, rankMode).map((item: any, i: number) => ({ ...item, displayIndex: i + 1 }));
 
                 const prev = links || (cached ? JSON.parse(cached) : null);
                 const prevStr = prev ? JSON.stringify(prev.map((i: any) => i.id || i.url)) : '';
@@ -92,7 +102,7 @@ export default function LinksClient() {
                     setLinks(sorted);
                     setRefreshed(true);
                     setTimeout(() => setRefreshed(false), 1800);
-                    try { localStorage.setItem('links_cache', JSON.stringify(sorted)); } catch (e) { /* ignore storage errors */ }
+                    try { localStorage.setItem(cacheKey, JSON.stringify(sorted)); } catch (e) { /* ignore storage errors */ }
                 } else {
                     // still ensure links are set (in case there was no cache)
                     if (!links) setLinks(sorted);
@@ -105,8 +115,7 @@ export default function LinksClient() {
         })();
 
         return () => { cancelled = true };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [rankMode]);
 
     // Helper: load content for a queue index
     async function loadContentAt(index: number) {
@@ -427,9 +436,49 @@ export default function LinksClient() {
     return (
         <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 10 }}>
-                <div style={{ fontWeight: 600 }}>HSP Linkstash</div>
+                <a
+                    href="https://hsp-ec.xyz"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="site-brand-link"
+                    aria-label="Open hsp-ec.xyz"
+                >
+                    <img
+                        src="https://hsp-ec.xyz/static/images/hsp-spinner.svg"
+                        alt="HSP"
+                        className="site-brand-icon"
+                        width={18}
+                        height={18}
+                    />
+                    <span className="site-brand-text">HSP Linkstash</span>
+                </a>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div className={`refresh-badge ${refreshed ? 'show' : ''}`}>{refreshed ? 'Updated' : loading ? 'Loading...' : 'Latest'}</div>
+                    <div className={`mode-switch ${refreshed ? 'show' : ''}`} role="tablist" aria-label="Feed sorting mode">
+                        <button
+                            type="button"
+                            className={`mode-pill ${rankMode === 'latest' ? 'active' : ''}`}
+                            onClick={() => setRankMode('latest')}
+                            disabled={loading && rankMode === 'latest'}
+                        >
+                            Latest
+                        </button>
+                        <button
+                            type="button"
+                            className={`mode-pill ${rankMode === 'top' ? 'active' : ''}`}
+                            onClick={() => setRankMode('top')}
+                            disabled={loading && rankMode === 'top'}
+                        >
+                            Top
+                        </button>
+                        <button
+                            type="button"
+                            className={`mode-pill ${rankMode === 'rising' ? 'active' : ''}`}
+                            onClick={() => setRankMode('rising')}
+                            disabled={loading && rankMode === 'rising'}
+                        >
+                            Rising
+                        </button>
+                    </div>
                     <button
                         type="button"
                         className="reader-header-button"

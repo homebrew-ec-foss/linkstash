@@ -6,6 +6,12 @@ This document describes the API endpoint that the ash application sends link dat
 
 Adds a new link to the collection.
 
+Voting behavior:
+- If the URL is new, the link is created with `count = 1`.
+- If the URL already exists, it is treated as a vote attempt.
+- Repeated vote attempts from the same submitter/room fingerprint within the cooldown window are ignored to prevent accidental or spammy rapid upvotes.
+- Cooldown is configurable with `VOTE_COOLDOWN_MS` (defaults to 6 hours).
+
 #### Headers
 
 - `Authorization: Bearer <token>` - Required authentication token
@@ -67,10 +73,16 @@ Retrieves all links in the collection, ordered by timestamp (newest first).
 #### Query Parameters
 
 - `url` (optional): Filter by specific URL to get a single link
+- `mode` (optional): Ranking mode for list responses. Values: `latest` (default), `top`, `rising`
 
 #### Response
 
 Returns a JSON array of link objects, or a single link object if `url` parameter is provided.
+
+Ranking modes:
+- `latest`: newest first, tie-broken by vote count
+- `top`: highest vote count first, tie-broken by recency
+- `rising`: boosts links with growing votes while applying time decay to surface fresher suggestions
 
 #### Example curl commands
 

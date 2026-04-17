@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { client, initDb, LinkRecord } from '../../../scripts/db';
 import { getPostHogClient } from '../../../lib/posthog-server';
 import YAML from 'js-yaml';
+import { createHash } from 'crypto';
 
 
 interface ExistingLinkEntry extends LinkRecord {
@@ -19,6 +20,30 @@ interface AddRequestBody {
         room_id?: string;
         room_comment?: string;
     };
+}
+
+const DEFAULT_VOTE_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+function getVoteCooldownMs() {
+    const raw = Number(process.env.VOTE_COOLDOWN_MS || DEFAULT_VOTE_COOLDOWN_MS);
+    if (!Number.isFinite(raw) || raw < 0) return DEFAULT_VOTE_COOLDOWN_MS;
+    return raw;
+}
+
+function createVoterFingerprint(submittedBy?: string | null, roomId?: string | null) {
+    const seed = (submittedBy && submittedBy.trim()) || (roomId && roomId.trim()) || 'anonymous';
+    return createHash('sha256').update(seed).digest('hex').slice(0, 16);
+}
+
+function pruneRecentVoters(voters: Record<string, number>, now: number, cooldownMs: number) {
+    const out: Record<string, number> = {};
+    for (const [fingerprint, ts] of Object.entries(voters)) {
+        if (typeof ts !== 'number') continue;
+        if (now - ts <= cooldownMs) {
+            out[fingerprint] = ts;
+        }
+    }
+    return out;
 }
 
 export async function POST(request: NextRequest) {
@@ -208,14 +233,31 @@ export async function POST(request: NextRequest) {
             }
             const now = Date.now();
             if (existingMap[nurl]) {
-                // increment count (upvote) and update timestamp
+                // Increment votes, but ignore rapid repeat votes from the same voter fingerprint.
                 const entry = existingMap[nurl];
-                const newCount = (entry.count || 1) + 1;
+                const cooldownMs = getVoteCooldownMs();
+                const voterFingerprint = createVoterFingerprint(submitter, roomId);
 
                 // Merge existing meta with upstream frontmatter when empty
                 let meta = entry.meta || {};
                 if (item.frontmatter && Object.keys(meta).length === 0) {
                     meta = item.frontmatter;
+                }
+
+                const existingVoteState = (meta.voteState && typeof meta.voteState === 'object') ? meta.voteState : {};
+                const recentVoters = pruneRecentVoters(
+                    (existingVoteState.recentVoters && typeof existingVoteState.recentVoters === 'object') ? existingVoteState.recentVoters : {},
+                    now,
+                    cooldownMs
+                );
+                const isDuplicateVote = typeof recentVoters[voterFingerprint] === 'number' && (now - recentVoters[voterFingerprint]) <= cooldownMs;
+
+                let newCount = Number(entry.count || 1);
+                let nextTs = Number(entry.ts || now);
+                if (!isDuplicateVote) {
+                    newCount += 1;
+                    nextTs = now;
+                    recentVoters[voterFingerprint] = now;
                 }
 
                 // Include submitter and room info in meta
@@ -233,6 +275,13 @@ export async function POST(request: NextRequest) {
                     meta.tags = tags;
                 }
 
+                meta.voteState = {
+                    recentVoters,
+                    uniqueRecentVoters: Object.keys(recentVoters).length,
+                    lastVoteAt: isDuplicateVote ? existingVoteState.lastVoteAt || entry.ts || now : now,
+                    cooldownMs,
+                };
+
                 // Update content inline if provided
                 let contentToSet = entry.content;
                 if (item.body) {
@@ -241,23 +290,39 @@ export async function POST(request: NextRequest) {
 
                 await client.execute({
                     sql: 'UPDATE links SET count = ?, ts = ?, meta = ?, content = ?, submitted_by = ? WHERE id = ?',
-                    args: [newCount, now, JSON.stringify(meta), contentToSet || null, submitter, entry.id]
+                    args: [newCount, nextTs, JSON.stringify(meta), contentToSet || null, submitter, entry.id]
                 });
 
-                // Track link upvoted event with PostHog
+                // Track link vote activity with PostHog
                 const posthog = getPostHogClient();
-                posthog.capture({
-                    distinctId: submitter || 'anonymous',
-                    event: 'link_upvoted',
-                    properties: {
-                        link_id: entry.id,
-                        link_url: item.url,
-                        link_domain: new URL(item.url).hostname,
-                        new_vote_count: newCount,
-                        submitted_by: submitter,
-                        room_id: roomId,
-                    }
-                });
+                if (isDuplicateVote) {
+                    posthog.capture({
+                        distinctId: submitter || 'anonymous',
+                        event: 'link_vote_ignored',
+                        properties: {
+                            link_id: entry.id,
+                            link_url: item.url,
+                            link_domain: new URL(item.url).hostname,
+                            vote_count: newCount,
+                            submitted_by: submitter,
+                            room_id: roomId,
+                            cooldown_ms: cooldownMs,
+                        }
+                    });
+                } else {
+                    posthog.capture({
+                        distinctId: submitter || 'anonymous',
+                        event: 'link_upvoted',
+                        properties: {
+                            link_id: entry.id,
+                            link_url: item.url,
+                            link_domain: new URL(item.url).hostname,
+                            new_vote_count: newCount,
+                            submitted_by: submitter,
+                            room_id: roomId,
+                        }
+                    });
+                }
 
                 // Ensure meta includes canonical URL
                 try {
@@ -271,7 +336,7 @@ export async function POST(request: NextRequest) {
                     const domain = (function () { try { return new URL(item.url).hostname } catch (e) { return '' } })();
                     await client.execute({
                         sql: 'INSERT OR REPLACE INTO link_index (link_id, normalized_url, domain, meta, ts) VALUES (?, ?, ?, ?, ?)',
-                        args: [entry.id, nurl, domain, JSON.stringify(meta), now]
+                        args: [entry.id, nurl, domain, JSON.stringify(meta), nextTs]
                     });
                 } catch (e) {
                     console.warn('Failed to upsert link_index for', entry.id, e);
@@ -279,6 +344,8 @@ export async function POST(request: NextRequest) {
             } else {
                 const id = crypto.randomUUID();
                 const meta = item.frontmatter || {};
+                const cooldownMs = getVoteCooldownMs();
+                const voterFingerprint = createVoterFingerprint(submitter, roomId);
 
                 // Ensure submitter & room info recorded in meta
                 if (submitter) {
@@ -292,6 +359,15 @@ export async function POST(request: NextRequest) {
                 if (tags.length > 0) {
                     meta.tags = tags;
                 }
+
+                meta.voteState = {
+                    recentVoters: {
+                        [voterFingerprint]: now,
+                    },
+                    uniqueRecentVoters: 1,
+                    lastVoteAt: now,
+                    cooldownMs,
+                };
 
                 const contentVal = item.body || null;
 
