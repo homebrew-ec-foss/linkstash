@@ -222,6 +222,33 @@ ol.link-list li:last-child {
     margin-top: 4px;
 }
 
+.link-reader-button {
+    margin-left: 8px;
+    margin-top: 2px;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    flex: 0 0 24px;
+}
+
+.link-reader-button:hover {
+    color: var(--text);
+    transform: translateY(-1px);
+}
+
+.link-reader-button:disabled {
+    opacity: 0.4;
+    cursor: default;
+    transform: none;
+}
+
 /* Fallbacks for very small screens */
 @media (max-width: 480px) {
     .rank {

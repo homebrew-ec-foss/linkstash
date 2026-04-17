@@ -528,6 +528,7 @@ export default function LinksClient() {
                                 const title = l.title || l.name || (l.meta && l.meta.title) || url || 'Untitled';
                                 let domain = l.domain || (l.meta && l.meta.domain) || '';
                                 if (!domain && url) { try { domain = new URL(url).hostname } catch (e) { domain = '' } }
+                                const readerId = l.id ? String(l.id) : '';
 
                                 return (
                                     <li key={l.id || url || idx} className={`link-item ${refreshed ? 'flash' : ''}`}>
@@ -550,6 +551,25 @@ export default function LinksClient() {
                                             >{title}</a>
                                             <div className="link-domain">{domain}{l.roomComment ? ` — ${l.roomComment}` : ''}</div>
                                         </div>
+
+                                        <button
+                                            type="button"
+                                            className="link-reader-button"
+                                            title={readerId ? 'Open in reader view' : 'Reader view unavailable'}
+                                            aria-label={readerId ? 'Open in reader view' : 'Reader view unavailable'}
+                                            disabled={!readerId}
+                                            onClick={() => {
+                                                if (!readerId) return;
+                                                posthog.capture('reader_opened_from_link', {
+                                                    link_id: readerId,
+                                                    link_title: title,
+                                                    link_url: url,
+                                                });
+                                                window.location.href = `/reader/${encodeURIComponent(readerId)}`;
+                                            }}
+                                        >
+                                            <BookOpen size={13} aria-hidden="true" />
+                                        </button>
 
                                         <div className="votes">{l.count ? `${l.count} votes` : ''}</div>
                                     </li>
