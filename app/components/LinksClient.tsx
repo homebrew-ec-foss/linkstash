@@ -1,814 +1,137 @@
-"use client";
+'use client';
 
-import { useEffect, useState, useRef } from 'react';
-import { Github, BookOpen, Filter } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeSanitize from 'rehype-sanitize';
-import posthog from 'posthog-js';
+import React, { JSX } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { groupItemsByDate } from '../../lib/text-utils';
+import { usePaginatedLinks } from '../hooks/usePaginatedLinks';
+import { Header } from './Header';
+import { LinksList } from './LinksList';
+import { SuggestionsPanel } from './SuggestionsPanel';
+import { logger } from '../../lib/logger';
+import type { RankMode, Link, RelatedLink, RelatedGroup } from '../../lib/types';
 
-type LinkItem = any;
-type SuggestedItem = {
-    id: string;
-    url: string;
-    domain: string;
-    title: string;
-    score: number;
-};
-type SuggestedGroup = {
-    name: string;
-    count: number;
-};
-
-type RankMode = 'latest' | 'top' | 'rising';
-
-function sortLinks(list: LinkItem[], mode: RankMode) {
-    if (mode === 'top') {
-        return list.slice().sort((a: any, b: any) => (b.count || 0) - (a.count || 0) || (b.ts || 0) - (a.ts || 0));
-    }
-    if (mode === 'rising') {
-        return list.slice().sort((a: any, b: any) => (b.score || 0) - (a.score || 0) || (b.count || 0) - (a.count || 0) || (b.ts || 0) - (a.ts || 0));
-    }
-    return list.slice().sort((a: any, b: any) => (b.ts || 0) - (a.ts || 0) || (b.count || 0) - (a.count || 0));
-}
-
-function formatDateLabel(ts: number | undefined) {
-    if (!ts) return 'Unknown';
-    const d = new Date(ts);
-    const now = new Date();
-
-    const isSameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-
-    if (isSameDay(d, now)) return 'Today';
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    if (isSameDay(d, yesterday)) return 'Yesterday';
-
-    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
-function groupByDate(list: LinkItem[]) {
-    const groups: Record<string, LinkItem[]> = {};
-    list.forEach((item) => {
-        const key = item.ts ? new Date(item.ts).toISOString().slice(0, 10) : 'unknown';
-        groups[key] = groups[key] || [];
-        groups[key].push(item);
-    });
-
-    // Convert to sorted array of groups (newest first)
-    const keys = Object.keys(groups).sort((a, b) => (b > a ? 1 : -1));
-    return keys.map((k) => ({ key: k, label: k === 'unknown' ? 'Unknown' : formatDateLabel(new Date(k).getTime()), items: groups[k] }));
-}
-
-export default function LinksClient() {
-    const [links, setLinks] = useState<LinkItem[] | null>(null);
+/**
+ * Main client component for the links feed
+ * Manages links, suggestions, and reader state
+ */
+export default function LinksClient(): JSX.Element {
     const [rankMode, setRankMode] = useState<RankMode>('latest');
-    const [loading, setLoading] = useState(true);
-    const [refreshed, setRefreshed] = useState(false);
-    const [suggestedItems, setSuggestedItems] = useState<SuggestedItem[]>([]);
-    const [suggestedGroups, setSuggestedGroups] = useState<SuggestedGroup[]>([]);
+    const [suggestionsExpanded, setSuggestionsExpanded] = useState(false);
+    const [suggestedItems, setSuggestedItems] = useState<RelatedLink[]>([]);
+    const [suggestedGroups, setSuggestedGroups] = useState<RelatedGroup[]>([]);
     const [suggestedLoading, setSuggestedLoading] = useState(false);
     const [suggestedSourceTitle, setSuggestedSourceTitle] = useState('');
-    const [suggestionsExpanded, setSuggestionsExpanded] = useState(false);
 
-    // Reader state
-    const [readerOpen, setReaderOpen] = useState(false);
-    const [readerQueue, setReaderQueue] = useState<Array<{ id?: string; title: string; url?: string }>>([]);
-    const [readerIndex, setReaderIndex] = useState(0);
-    const [readerContent, setReaderContent] = useState<string | null>(null);
-    const [readerLoading, setReaderLoading] = useState(false);
-    const [readerError, setReaderError] = useState<string | null>(null);
-    // Default to minimal reading view
-    const [readerMinimal, setReaderMinimal] = useState(true);
+    const { links, isLoading, isRefreshed, hasMore, loadMore } = usePaginatedLinks(rankMode);
+    const router = useRouter();
 
-    // Touch swipe tracking (for prev/next)
-    const touchStartX = useRef<number | null>(null);
-    const touchStartY = useRef<number | null>(null);
-    const touchStartTime = useRef<number | null>(null);
-
-    // Load cached links immediately
+    // Load related links/suggestions based on the top link
     useEffect(() => {
-        const cacheKey = `links_cache_${rankMode}`;
-        const cached = typeof window !== 'undefined' ? localStorage.getItem(cacheKey) : null;
-        if (cached) {
-            try {
-                const parsed = JSON.parse(cached);
-                setLinks(sortLinks(parsed, rankMode));
-            } catch (e) {
-                // ignore
-            }
-        }
-
-        // Always fetch fresh in background
-        let cancelled = false;
-        (async () => {
-            try {
-                const res = await fetch(`/api/links?mode=${rankMode}`);
-                if (!res.ok) return;
-                const data = await res.json();
-                if (cancelled) return;
-                const sorted = sortLinks(data, rankMode).map((item: any, i: number) => ({ ...item, displayIndex: i + 1 }));
-
-                const prev = links || (cached ? JSON.parse(cached) : null);
-                const prevStr = prev ? JSON.stringify(prev.map((i: any) => i.id || i.url)) : '';
-                const newStr = JSON.stringify(sorted.map((i: any) => i.id || i.url));
-
-                // If different, update and show animation
-                if (prevStr !== newStr) {
-                    setLinks(sorted);
-                    setRefreshed(true);
-                    setTimeout(() => setRefreshed(false), 1800);
-                    try { localStorage.setItem(cacheKey, JSON.stringify(sorted)); } catch (e) { /* ignore storage errors */ }
-                } else {
-                    // still ensure links are set (in case there was no cache)
-                    if (!links) setLinks(sorted);
-                }
-            } catch (e) {
-                // ignore
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        })();
-
-        return () => { cancelled = true };
-    }, [rankMode]);
-
-    useEffect(() => {
-        const source = (links || []).find((x: any) => x?.id);
-        if (!source?.id) {
+        const topLink = links?.[0];
+        if (!topLink?.id) {
             setSuggestedItems([]);
             setSuggestedGroups([]);
             setSuggestedSourceTitle('');
             return;
         }
 
-        setSuggestedSourceTitle(source.title || source.name || source.meta?.title || source.url || 'Top link');
+        setSuggestedSourceTitle(
+            topLink.title || (topLink.meta?.title as string) || topLink.url || 'Top link'
+        );
 
         let cancelled = false;
+
         (async () => {
             setSuggestedLoading(true);
             try {
-                const res = await fetch(`/api/related/${encodeURIComponent(String(source.id))}`);
-                if (!res.ok) return;
-                const payload = await res.json();
+                const response = await fetch(
+                    `/api/related/${encodeURIComponent(String(topLink.id))}`
+                );
+                if (!response.ok) {
+                    logger.warn(
+                        `Failed to fetch related links: ${response.status}`
+                    );
+                    return;
+                }
+
+                const payload = await response.json();
                 if (cancelled) return;
-                setSuggestedItems(Array.isArray(payload.related) ? payload.related : []);
-                setSuggestedGroups(Array.isArray(payload.groups) ? payload.groups : []);
-            } catch (e) {
+
+                setSuggestedItems(
+                    Array.isArray(payload.related) ? payload.related : []
+                );
+                setSuggestedGroups(
+                    Array.isArray(payload.groups) ? payload.groups : []
+                );
+            } catch (error) {
                 if (!cancelled) {
+                    logger.error('Error fetching related links', error);
                     setSuggestedItems([]);
                     setSuggestedGroups([]);
                 }
             } finally {
-                if (!cancelled) setSuggestedLoading(false);
+                if (!cancelled) {
+                    setSuggestedLoading(false);
+                }
             }
         })();
 
         return () => {
             cancelled = true;
         };
-    }, [links, rankMode]);
+    }, [links]);
 
-    // Helper: load content for a queue index
-    async function loadContentAt(index: number) {
-        const item = readerQueue[index];
-        if (!item) {
-            setReaderError('No item in queue');
-            setReaderContent(null);
+    // Group links by date for display
+    const dateGroups = links ? groupItemsByDate(links) : [];
+
+    const handleOpenReader = (link: Link) => {
+        if (!link.id) {
+            logger.warn('Cannot open reader for link without ID');
             return;
         }
 
-        setReaderLoading(true);
-        setReaderError(null);
-        setReaderContent(null);
-
-        try {
-            if (!item.id) {
-                setReaderError('No stored content for this link');
-                setReaderLoading(false);
-                return;
-            }
-
-            // Add a fetch timeout so the UI doesn't stay in indefinite "Loading…"
-            const controller = new AbortController();
-            let timedOut = false;
-            const timeoutMs = 8000;
-            const timeoutId = window.setTimeout(() => {
-                timedOut = true;
-                controller.abort();
-                setReaderError('Error loading content (timeout)');
-                setReaderLoading(false);
-            }, timeoutMs);
-
-            const res = await fetch(`/api/content/${item.id}`, { signal: controller.signal });
-            clearTimeout(timeoutId);
-
-            if (timedOut) return;
-
-            if (!res.ok) {
-                setReaderError(`Content not found (${res.status})`);
-                return;
-            }
-
-            const txt = await res.text();
-            setReaderContent(txt);
-        } catch (e) {
-            // If we aborted due to timeout we've already shown an error; otherwise show a generic error
-            if (!((e as any)?.name === 'AbortError')) {
-                setReaderError('Error fetching content');
-            }
-        } finally {
-            setReaderLoading(false);
-        }
-    }
-
-    // Small helper: get a text excerpt from markdown content
-    function getExcerpt(md: string | null, length = 300) {
-        if (!md) return '';
-        // Strip markdown headings, images, links and formatting lightly
-        let txt = md.replace(/\!\[.*?\]\(.*?\)/g, ' ');
-        txt = txt.replace(/\[(.*?)\]\(.*?\)/g, '$1');
-        txt = txt.replace(/[#*_>`~\-]{1,}/g, ' ');
-        txt = txt.replace(/\s+/g, ' ').trim();
-        if (txt.length <= length) return txt;
-        return txt.slice(0, length).trim() + '…';
-    }
-
-
-
-    // Effect: load content when index or queue changes while open
-    useEffect(() => {
-        if (readerOpen) {
-            loadContentAt(readerIndex);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [readerOpen, readerIndex, readerQueue]);
-
-    // Prevent background scrolling when reader is open (covers trackpad, wheel, and iOS touchmove)
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const originalOverflow = document.body.style.overflow;
-
-        const preventTouch = (e: TouchEvent) => {
-            // Prevent touch scrolling reaching the background, but allow touch interactions
-            // inside the reader overlay (so the content can scroll on mobile).
-            try {
-                const overlay = document.querySelector('.reader-overlay');
-                if (overlay && e.target && (overlay as Node).contains(e.target as Node)) {
-                    // Let touches inside the reader proceed (do not preventDefault)
-                    return;
-                }
-            } catch (err) {
-                // fallthrough to preventDefault if anything unexpected happens
-            }
-
-            e.preventDefault();
-        };
-
-        if (readerOpen) {
-            document.body.style.overflow = 'hidden';
-            // iOS needs non-passive listener to prevent default
-            document.addEventListener('touchmove', preventTouch, { passive: false });
-        } else {
-            document.body.style.overflow = originalOverflow || '';
-        }
-
-        return () => {
-            document.body.style.overflow = originalOverflow || '';
-            document.removeEventListener('touchmove', preventTouch as EventListener);
-        };
-    }, [readerOpen]);
-
-    // Keyboard navigation (left/right/escape) while reader is open
-    useEffect(() => {
-        if (!readerOpen) return;
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'ArrowLeft') { gotoPrev(); e.preventDefault(); }
-            else if (e.key === 'ArrowRight') { gotoNext(); e.preventDefault(); }
-            else if (e.key === 'Escape') { closeReader(); }
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [readerOpen, readerIndex, readerQueue]);
-
-    // Touch swipe handlers (start/end) to detect left/right swipes
-    function handleTouchStart(e: React.TouchEvent) {
-        const t = e.touches[0];
-        touchStartX.current = t.clientX;
-        touchStartY.current = t.clientY;
-        touchStartTime.current = Date.now();
-    }
-
-    function handleTouchEnd(e: React.TouchEvent) {
-        const t = e.changedTouches[0];
-        const sx = touchStartX.current;
-        const sy = touchStartY.current;
-        const st = touchStartTime.current || 0;
-        if (sx == null || sy == null) return;
-        const dx = t.clientX - sx;
-        const dy = t.clientY - sy;
-        const dt = Date.now() - st;
-
-        // Horizontal swipe threshold and not mostly vertical
-        if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) && dt < 1000) {
-            if (dx > 0) gotoPrev(); else gotoNext();
-        }
-
-        touchStartX.current = null;
-        touchStartY.current = null;
-        touchStartTime.current = null;
-    }
-
-    function closeReader() {
-        posthog.capture('reader_closed', {
-            queue_length: readerQueue.length,
-            current_index: readerIndex,
-        });
-        setReaderOpen(false);
-        setReaderContent(null);
-        setReaderError(null);
-    }
-
-    function gotoNext() {
-        if (readerIndex < readerQueue.length - 1) {
-            posthog.capture('reader_navigated', {
-                direction: 'next',
-                from_index: readerIndex,
-                to_index: readerIndex + 1,
-                queue_length: readerQueue.length,
-            });
-            setReaderIndex(readerIndex + 1);
-        }
-    }
-
-    function gotoPrev() {
-        if (readerIndex > 0) {
-            posthog.capture('reader_navigated', {
-                direction: 'previous',
-                from_index: readerIndex,
-                to_index: readerIndex - 1,
-                queue_length: readerQueue.length,
-            });
-            setReaderIndex(readerIndex - 1);
-        }
-    }
-
-    function removeFromQueue(index: number) {
-        const removedItem = readerQueue[index];
-        posthog.capture('reader_item_removed', {
-            removed_title: removedItem?.title,
-            removed_index: index,
-            queue_length: readerQueue.length,
-        });
-        setReaderQueue((q) => q.filter((_, i) => i !== index));
-        if (index === readerIndex) {
-            // If removing current, try to show next or close
-            if (index < readerQueue.length - 1) {
-                setReaderIndex(index);
-            } else if (index > 0) {
-                setReaderIndex(index - 1);
-            } else {
-                closeReader();
-            }
-        } else if (index < readerIndex) {
-            setReaderIndex((i) => i - 1);
-        }
-    }
-
-    // Render
-    if (!links || links.length === 0) {
-        return (
-            <div className="card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 10 }}>
-                    <div style={{ fontWeight: 600 }}>Links</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div className={`refresh-badge ${refreshed ? 'show' : ''}`}>{refreshed ? 'Updated' : loading ? 'Loading...' : 'Latest'}</div>
-                        <button
-                            type="button"
-                            className="reader-header-button"
-                            title="Open reading view"
-                            onClick={() => {
-                                // Open only the first available stored content id.
-                                const firstId = (links || []).find((x) => x.id)?.id;
-                                if (firstId) {
-                                    window.location.href = `/reader/${encodeURIComponent(firstId)}`;
-                                } else {
-                                    // fallback: open first external url
-                                    const firstUrl = (links || []).find((x) => x.url || (x.meta && x.meta.url));
-                                    if (firstUrl && (firstUrl.url || (firstUrl.meta && firstUrl.meta.url))) {
-                                        const u = firstUrl.url || (firstUrl.meta && firstUrl.meta.url);
-                                        window.open(u, '_blank');
-                                    }
-                                }
-                            }}
-                        >
-                            <BookOpen size={16} aria-hidden="true" />
-                        </button>
-                        <a href="/summary" className="summary-button" aria-label="Open summary and room filters">
-                            <Filter size={16} aria-hidden="true" />
-                        </a>
-                        <a href="https://github.com/homebrew-ec-foss/linkstash" className="gh-button" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository">
-                            <Github size={16} aria-hidden="true" />
-                        </a>
-                    </div>
-                </div>
-                <ol className="link-list">
-                    {loading ? (
-                        <li className="p-6 text-center text-gray-500">Loading links…</li>
-                    ) : (
-                        <li className="p-6 text-center text-gray-500">No links found.</li>
-                    )}
-                </ol>
-            </div>
-        );
-    }
-
-    // Group links by date
-    const groups = groupByDate(links);
-
-    // Header display: prefer the page title, but avoid repeating the H1 — extract the H1 from content if present
-    const currentReaderItem = readerQueue[readerIndex] || {};
-    const title = currentReaderItem.title || '';
-    const url = currentReaderItem.url || '';
-
-    // Extract the first markdown H1 that is NOT inside a fenced code block (``` / ~~~).
-    function extractFirstH1WithoutCode(md?: string) {
-        if (!md) return { h1: '', content: '' };
-        const lines = md.split(/\r?\n/);
-        let inFence = false;
-        let fenceToken = '';
-        let found = '';
-        const out: string[] = [];
-
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            const fenceMatch = line.match(/^(`{3,}|~{3,})/);
-            if (fenceMatch) {
-                if (!inFence) { inFence = true; fenceToken = fenceMatch[1]; }
-                else if (line.startsWith(fenceToken)) { inFence = false; fenceToken = ''; }
-                out.push(line);
-                continue;
-            }
-
-            if (!inFence && !found) {
-                const m = line.match(/^#\s+(.+)$/);
-                if (m) { found = m[1].trim(); continue; }
-            }
-
-            out.push(line);
-        }
-
-        return { h1: found, content: out.join('\n').trimStart() };
-    }
-
-    const _extracted = extractFirstH1WithoutCode(readerContent || undefined);
-    const extractedH1 = _extracted.h1 || '';
-    let contentWithoutH1 = _extracted.content || '';
-
-    const normalize = (s: string) => (s || '').replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
-    const titleSameAsH1 = title && extractedH1 && normalize(title) === normalize(extractedH1);
-
-    let headerText = '';
-    let headerHref = '';
-
-    // Prefer showing the hostname when a URL is available (user wants link in top bar)
-    if (url) {
-        try { headerText = new URL(url).hostname; } catch (e) { headerText = url; }
-        headerHref = url;
-    } else if (title) {
-        headerText = title;
-        headerHref = '';
-    } else {
-        headerText = 'Reader';
-        headerHref = '';
-    }
-
-    const headingTitle = title || '';
+        // Navigate directly to the clicked link in reader view
+        router.push(`/reader/${encodeURIComponent(link.id)}`);
+    };
 
     return (
         <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 10 }}>
-                <a
-                    href="https://hsp-ec.xyz"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="site-brand-link"
-                    aria-label="Open hsp-ec.xyz"
-                >
-                    <img
-                        src="https://hsp-ec.xyz/static/images/hsp-spinner.svg"
-                        alt="HSP"
-                        className="site-brand-icon"
-                        width={18}
-                        height={18}
-                    />
-                    <span className="site-brand-text">HSP Linkstash</span>
-                </a>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div className={`mode-switch ${refreshed ? 'show' : ''}`} role="tablist" aria-label="Feed sorting mode">
-                        <button
-                            type="button"
-                            className={`mode-pill ${rankMode === 'latest' ? 'active' : ''}`}
-                            onClick={() => setRankMode('latest')}
-                            disabled={loading && rankMode === 'latest'}
-                        >
-                            Latest
-                        </button>
-                        <button
-                            type="button"
-                            className={`mode-pill ${rankMode === 'top' ? 'active' : ''}`}
-                            onClick={() => setRankMode('top')}
-                            disabled={loading && rankMode === 'top'}
-                        >
-                            Top
-                        </button>
-                        <button
-                            type="button"
-                            className={`mode-pill ${rankMode === 'rising' ? 'active' : ''}`}
-                            onClick={() => setRankMode('rising')}
-                            disabled={loading && rankMode === 'rising'}
-                        >
-                            Rising
-                        </button>
-                    </div>
-                    <button
-                        type="button"
-                        className="reader-header-button"
-                        title="Open reading view"
-                        onClick={() => {
-                            posthog.capture('reader_opened', {
-                                total_links: (links || []).length,
-                            });
-                            // Open only the first available stored content id.
-                            const firstId = (links || []).find((x) => x.id)?.id;
-                            if (firstId) {
-                                window.location.href = `/reader/${encodeURIComponent(firstId)}`;
-                            } else {
-                                const firstUrl = (links || []).find((x) => x.url || (x.meta && x.meta.url));
-                                if (firstUrl && (firstUrl.url || (firstUrl.meta && firstUrl.meta.url))) {
-                                    const u = firstUrl.url || (firstUrl.meta && firstUrl.meta.url);
-                                    window.open(u, '_blank');
-                                }
-                            }
-                        }}
-                    >
-                        <BookOpen size={16} aria-hidden="true" />
-                    </button>
-                    <a href="/summary" className="summary-button" aria-label="Open summary and room filters">
-                        <Filter size={16} aria-hidden="true" />
-                    </a>
-                    <a
-                        href="https://github.com/homebrew-ec-foss/linkstash"
-                        className="gh-button"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label="GitHub repository"
-                        onClick={() => posthog.capture('github_link_clicked')}
-                    >
-                        <Github size={16} aria-hidden="true" />
-                    </a>
-                </div>
-            </div>
+            <Header
+                rankMode={rankMode}
+                onRankModeChange={setRankMode}
+                isLoading={isLoading}
+                isRefreshed={isRefreshed}
+                links={links || []}
+                onOpenReader={() => {
+                    const firstLink = links?.find((l) => Boolean(l.id));
+                    if (firstLink) {
+                        handleOpenReader(firstLink);
+                    }
+                }}
+                suggestionsExpanded={suggestionsExpanded}
+                onToggleSuggestions={() => setSuggestionsExpanded((v) => !v)}
+            />
 
             <div>
-                <div className="home-suggestions-toggle-wrap">
-                    <button
-                        type="button"
-                        className="home-suggestions-toggle"
-                        aria-expanded={suggestionsExpanded}
-                        onClick={() => setSuggestionsExpanded((v) => !v)}
-                    >
-                        {suggestionsExpanded ? 'Hide suggestions' : 'Show suggestions'}
-                    </button>
-                </div>
+                <SuggestionsPanel
+                    isExpanded={suggestionsExpanded}
+                    onToggle={() => setSuggestionsExpanded((v) => !v)}
+                    isLoading={suggestedLoading}
+                    sourceTitle={suggestedSourceTitle}
+                    suggestedItems={suggestedItems}
+                    suggestedGroups={suggestedGroups}
+                />
 
-                {suggestionsExpanded ? (
-                    <div className="home-suggestions-panel" aria-label="Homepage suggested content">
-                        <div className="home-suggestions-col">
-                            <div className="home-suggestions-title">Suggested Articles</div>
-                            {suggestedSourceTitle ? (
-                                <div className="home-suggestions-subtitle">Based on: {suggestedSourceTitle}</div>
-                            ) : null}
-                            {suggestedLoading ? (
-                                <div className="suggestion-empty">Finding related links...</div>
-                            ) : suggestedItems.length === 0 ? (
-                                <div className="suggestion-empty">No related links yet.</div>
-                            ) : (
-                                <ol className="suggestion-list">
-                                    {suggestedItems.slice(0, 6).map((item) => (
-                                        <li key={item.id}>
-                                            <a href={`/reader/${encodeURIComponent(item.id)}`} className="suggestion-link">
-                                                <span className="suggestion-title">{item.title}</span>
-                                                <span className="suggestion-meta">{item.domain || 'unknown domain'} • {Math.round((item.score || 0) * 100)}%</span>
-                                            </a>
-                                        </li>
-                                    ))}
-                                </ol>
-                            )}
-                        </div>
-
-                        <div className="home-suggestions-col">
-                            <div className="home-suggestions-title">Suggested Groups</div>
-                            {suggestedGroups.length === 0 ? (
-                                <div className="suggestion-empty">No groups available.</div>
-                            ) : (
-                                <ul className="suggestion-group-list">
-                                    {suggestedGroups.slice(0, 6).map((group) => (
-                                        <li key={group.name}>
-                                            <span>{group.name}</span>
-                                            <strong>{group.count}</strong>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                    </div>
-                ) : null}
-
-                {groups.map((g) => (
-                    <div key={g.key} className="date-group">
-                        <div className="date-heading">{g.label}</div>
-                        <ol className="link-list">
-                            {g.items.map((l: any, idx: number) => {
-                                const url = l.url || (l.meta && l.meta.url) || '';
-                                const title = l.title || l.name || (l.meta && l.meta.title) || url || 'Untitled';
-                                let domain = l.domain || (l.meta && l.meta.domain) || '';
-                                if (!domain && url) { try { domain = new URL(url).hostname } catch (e) { domain = '' } }
-                                const readerId = l.id ? String(l.id) : '';
-
-                                return (
-                                    <li key={l.id || url || idx} className={`link-item ${refreshed ? 'flash' : ''}`}>
-                                        <div className="rank">{l.displayIndex || idx + 1}.</div>
-                                        <div className="link-main">
-                                            <a
-                                                href={url || '#'}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="link-title"
-                                                onClick={() => {
-                                                    posthog.capture('link_clicked', {
-                                                        link_title: title,
-                                                        link_url: url,
-                                                        link_domain: domain,
-                                                        link_rank: l.displayIndex || idx + 1,
-                                                        vote_count: l.count || 0,
-                                                    });
-                                                }}
-                                            >{title}</a>
-                                            <div className="link-domain">{domain}{l.roomComment ? ` — ${l.roomComment}` : ''}</div>
-                                        </div>
-
-                                        <button
-                                            type="button"
-                                            className="link-reader-button"
-                                            title={readerId ? 'Open in reader view' : 'Reader view unavailable'}
-                                            aria-label={readerId ? 'Open in reader view' : 'Reader view unavailable'}
-                                            disabled={!readerId}
-                                            onClick={() => {
-                                                if (!readerId) return;
-                                                posthog.capture('reader_opened_from_link', {
-                                                    link_id: readerId,
-                                                    link_title: title,
-                                                    link_url: url,
-                                                });
-                                                window.location.href = `/reader/${encodeURIComponent(readerId)}`;
-                                            }}
-                                        >
-                                            <BookOpen size={13} aria-hidden="true" />
-                                        </button>
-
-                                        <div className="votes">{l.count ? `${l.count} votes` : ''}</div>
-                                    </li>
-                                )
-                            })}
-                        </ol>
-                    </div>
-                ))}
+                <LinksList
+                    groups={dateGroups}
+                    isLoading={isLoading}
+                    isRefreshed={isRefreshed}
+                    hasMore={hasMore}
+                    onOpenReader={handleOpenReader}
+                    onLoadMore={loadMore}
+                />
             </div>
-
-            {/* Reader modal */}
-            {readerOpen && (
-                <div className="reader-overlay" role="dialog" aria-modal="true" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-                    <div className={`reader-panel ${readerMinimal ? 'reader-minimal' : ''}`}>
-                        <aside className="reader-sidebar">
-                            <div className="sidebar-title">{readerQueue[readerIndex]?.title || 'Reader'}</div>
-                            <div className="sidebar-excerpt">{getExcerpt(readerContent || '', 800) || 'No preview available.'}</div>
-                        </aside>
-
-                        <div className="reader-body">
-                            <div className="reader-ctrls-vertical" role="toolbar" aria-label="Reader navigation">
-                                <button className="reader-btn-small" type="button" onClick={gotoPrev} disabled={readerIndex === 0}>‹</button>
-                                <button className="reader-btn-small" type="button" onClick={gotoNext} disabled={readerIndex >= readerQueue.length - 1}>›</button>
-                                <a className="reader-btn-small" href={readerQueue[readerIndex]?.url || '#'} target="_blank" rel="noopener noreferrer" aria-label="Open">⤢</a>
-                                <button className="reader-btn-small" type="button" onClick={() => removeFromQueue(readerIndex)} aria-label="Remove">×</button>
-                            </div>
-
-                            <div className="reader-header">
-                                <div className="reader-title">
-                                    {headerHref ? (
-                                        <a href={headerHref} target="_blank" rel="noopener noreferrer" className="reader-header-link" title={headerHref}>{headerText}</a>
-                                    ) : (
-                                        <span className="reader-header-text">{headerText}</span>
-                                    )}
-                                </div>
-                                <div className="reader-controls">
-                                    <a href={readerQueue[readerIndex]?.url || '#'} target="_blank" rel="noopener noreferrer" className="reader-open-link">Open</a>
-                                    <button type="button" onClick={closeReader} aria-label="Close">Close</button>
-                                </div>
-                            </div>
-
-                            <div className="reader-content">
-                                {readerLoading ? (
-                                    <div className="p-6 text-center text-gray-500">Loading…</div>
-                                ) : readerError ? (
-                                    <div className="p-6 text-center text-gray-500">{readerError}</div>
-                                ) : readerContent ? (
-                                    <article className="markdown-body">
-                                        {/* Always render the page H1: prefer the extracted H1 from content, otherwise use heading/fallback */}
-                                        <h1 className="markdown-title">{extractedH1 || headingTitle || readerQueue[readerIndex]?.title || headerText || 'Reader'}</h1>
-
-                                        <ReactMarkdown
-                                            remarkPlugins={[remarkGfm]}
-                                            rehypePlugins={[rehypeSanitize]}
-                                            components={{
-                                                img: ({ node, src, alt, title }) => {
-                                                    // Helper to extract YouTube ID
-                                                    const getYouTubeId = (url: string | undefined) => {
-                                                        if (!url) return null;
-                                                        try {
-                                                            const u = new URL(url);
-                                                            if (u.hostname === 'youtu.be') {
-                                                                return u.pathname.slice(1);
-                                                            }
-                                                            if (u.hostname === 'www.youtube.com' || u.hostname === 'youtube.com' || u.hostname.endsWith('.youtube.com')) {
-                                                                // /watch?v=ID or /shorts/ID
-                                                                const v = u.searchParams.get('v');
-                                                                if (v) return v;
-                                                                const parts = u.pathname.split('/').filter(Boolean);
-                                                                // handle /shorts/<id>
-                                                                if (parts[0] === 'shorts' && parts[1]) return parts[1];
-                                                            }
-                                                            return null;
-                                                        } catch (e) {
-                                                            return null;
-                                                        }
-                                                    };
-
-                                                    const id = getYouTubeId(src as string | undefined);
-                                                    if (id) {
-                                                        const embed = `https://www.youtube.com/embed/${id}`;
-                                                        return (
-                                                            <div className="embed-youtube">
-                                                                <iframe src={embed} title={alt || title || 'YouTube video'} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
-                                                            </div>
-                                                        );
-                                                    }
-
-                                                    // Fallback to normal img with a graceful proxy-on-error fallback.
-                                                    return (
-                                                        <img
-                                                            src={src}
-                                                            alt={alt}
-                                                            title={title}
-                                                            className="markdown-img"
-                                                            onError={(e: any) => {
-                                                                try {
-                                                                    const t = e.currentTarget as HTMLImageElement;
-                                                                    // only attempt proxy once
-                                                                    if (t.dataset && t.dataset.proxied) return;
-                                                                    t.dataset.proxied = '1';
-                                                                    t.src = `/api/proxy?url=${encodeURIComponent(String(src || ''))}`;
-                                                                } catch (err) {
-                                                                    // ignore
-                                                                }
-                                                            }}
-                                                        />
-                                                    );
-                                                }
-                                            }}
-                                        >
-                                            {contentWithoutH1}
-                                        </ReactMarkdown>
-                                    </article>
-                                ) : (
-                                    <div className="p-6 text-center text-gray-500">No content.</div>
-                                )}
-                            </div>
-                        </div>
-
-                        <aside className="reader-queue">
-                            <ol>
-                                {readerQueue.map((it, i) => (
-                                    <li key={it.id || it.url || i} className={i === readerIndex ? 'active' : ''} onClick={() => setReaderIndex(i)}>
-                                        <div className="queue-title">{it.title}</div>
-                                        <button className="queue-remove" onClick={(e) => { e.stopPropagation(); removeFromQueue(i); }} aria-label="Remove">×</button>
-                                    </li>
-                                ))}
-                            </ol>
-                        </aside>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

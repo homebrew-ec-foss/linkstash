@@ -34,11 +34,16 @@ export default function ReaderPage() {
     const [relatedItems, setRelatedItems] = useState<SuggestedItem[]>([]);
     const [relatedGroups, setRelatedGroups] = useState<SuggestedGroup[]>([]);
     const [relatedLoading, setRelatedLoading] = useState(false);
+    const [fontSize, setFontSize] = useState(16);
+    const [fontFamily, setFontFamily] = useState('system-ui');
     const router = useRouter();
 
     const touchStartX = useRef<number | null>(null);
     const touchStartY = useRef<number | null>(null);
     const touchStartTime = useRef<number | null>(null);
+
+    // Derive current ID from queue and index
+    const currentId = queue && queue.length > 0 ? queue[index] : undefined;
 
     // Online/offline detection
     useEffect(() => {
@@ -134,6 +139,28 @@ export default function ReaderPage() {
             // ignore localStorage errors
         }
     }, [queue]);
+
+    // Fetch metadata for current article if not available
+    useEffect(() => {
+        if (!currentId || metas[currentId]) return;
+
+        (async () => {
+            try {
+                const res = await fetch('/api/links?limit=500&offset=0&mode=latest');
+                if (!res.ok) return;
+                const data = await res.json();
+                const items = data.items || [];
+
+                // Find the current article
+                const currentItem = items.find((l: any) => l.id === currentId);
+                if (currentItem) {
+                    setMetas(prev => ({ ...prev, [currentId]: currentItem }));
+                }
+            } catch (e) {
+                // ignore errors
+            }
+        })();
+    }, [currentId, metas]);
 
     // Load content for current index
     useEffect(() => {
@@ -315,7 +342,6 @@ export default function ReaderPage() {
         history.replaceState(null, '', `/reader/${encodeURIComponent(q[newIndex])}`);
     }
 
-    const currentId = queue[index];
     const currentMeta = currentId ? metas[currentId] : null;
 
     useEffect(() => {
@@ -352,6 +378,7 @@ export default function ReaderPage() {
 
     // Ensure every rendered page has an H1: prefer meta title, then hostname (from URL), then id, then a generic fallback
     const defaultH1Text = (() => {
+        if (currentMeta?.meta?.title) return currentMeta.meta.title;
         if (currentMeta?.title) return currentMeta.title;
         if (currentMeta?.url) {
             try { return new URL(currentMeta.url).hostname; } catch (e) { /* ignore invalid URL */ }
@@ -394,13 +421,20 @@ export default function ReaderPage() {
     const { h1: extractedH1, content: contentWithoutH1 } = extractFirstH1WithoutCode(content || undefined);
     const pageH1 = extractedH1 || defaultH1Text;
 
+    // Get title from metadata (could be at meta.title or title)
+    const metaTitle = currentMeta?.meta?.title || currentMeta?.title || extractedH1;
 
+    // Update document title to show current article
+    React.useEffect(() => {
+        const title = metaTitle || 'Reader';
+        document.title = title;
+    }, [metaTitle]);
 
     return (
         <div className="reader-overlay" role="region" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} style={{ minHeight: '100vh' }}>
             <div className="reader-panel reader-minimal" style={{ height: '100vh' }}>
                 <aside className="reader-sidebar">
-                    <div className="sidebar-title">{currentMeta?.title || 'Reader'}</div>
+                    <div className="sidebar-title">{metaTitle || 'Reader'}</div>
                     <div className="sidebar-excerpt">{currentMeta?.summary || ''}</div>
                 </aside>
 
@@ -415,14 +449,69 @@ export default function ReaderPage() {
                     </div>
 
                     <div className="reader-header">
-                        <div className="reader-title">{currentMeta?.url ? (<a href={currentMeta.url} target="_blank" rel="noopener noreferrer" className="reader-header-link">{new URL(currentMeta.url).hostname}</a>) : (currentMeta?.title || 'Reader')}</div>
+                        <div className="reader-title">{currentMeta?.url ? (<a href={currentMeta.url} target="_blank" rel="noopener noreferrer" className="reader-header-link">{new URL(currentMeta.url).hostname}</a>) : (metaTitle || 'Reader')}</div>
                         <div className="reader-status">
                             {!isOnline && <span className="status-badge offline">Offline</span>}
                             {isFromCache && <span className="status-badge cached">Cached</span>}
                         </div>
-                        <div className="reader-controls">
-                            {currentMeta?.url && (<a href={currentMeta.url} target="_blank" rel="noopener noreferrer" className="reader-open-link">Open</a>)}
-                            <button type="button" onClick={() => router.back()} aria-label="Close">Close</button>
+                        <div className="reader-toolbar">
+                            <div className="toolbar-group">
+                                <button
+                                    type="button"
+                                    className="toolbar-button"
+                                    title="Decrease font size"
+                                    onClick={() => setFontSize(Math.max(12, fontSize - 1))}
+                                >
+                                    −
+                                </button>
+                                <input
+                                    type="range"
+                                    min="12"
+                                    max="24"
+                                    value={fontSize}
+                                    onChange={(e) => setFontSize(parseInt(e.target.value, 10))}
+                                    className="toolbar-slider"
+                                    title={`Font size: ${fontSize}px`}
+                                />
+                                <button
+                                    type="button"
+                                    className="toolbar-button"
+                                    title="Increase font size"
+                                    onClick={() => setFontSize(Math.min(24, fontSize + 1))}
+                                >
+                                    +
+                                </button>
+                            </div>
+
+                            <div className="toolbar-group">
+                                <select
+                                    value={fontFamily}
+                                    onChange={(e) => setFontFamily(e.target.value)}
+                                    className="toolbar-select"
+                                    title="Font family"
+                                >
+                                    <option value="system-ui">System</option>
+                                    <option value="Baskerville, 'Times New Roman', serif">Baskerville</option>
+                                    <option value="Georgia, serif">Georgia</option>
+                                    <option value="EB Garamond, serif">EB Garamond</option>
+                                    <option value="Garamond, serif">Garamond</option>
+                                    <option value="'Palatino Linotype', 'Book Antiqua', Palatino, serif">Palatino</option>
+                                    <option value="Cambria, serif">Cambria</option>
+                                    <option value="'Times New Roman', serif">Times</option>
+                                    <option value="Courier, monospace">Monospace</option>
+                                </select>
+                            </div>
+
+                            <div className="toolbar-group toolbar-group-end">
+                                {currentMeta?.url && (
+                                    <a href={currentMeta.url} target="_blank" rel="noopener noreferrer" className="toolbar-button" title="Open original">
+                                        ↗
+                                    </a>
+                                )}
+                                <button type="button" className="toolbar-button" onClick={() => router.back()} aria-label="Close" title="Close">
+                                    ✕
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -433,9 +522,9 @@ export default function ReaderPage() {
                             ) : error ? (
                                 <div className="p-6 text-center text-gray-500">{error}</div>
                             ) : content ? (
-                                <article className="markdown-body">
-                                    {/* Always render a single H1: prefer the extracted H1 from content, otherwise fallback to pageH1 */}
-                                    <h1 className="markdown-title">{pageH1}</h1>
+                                <article className="markdown-body" style={{ fontSize: `${fontSize}px`, fontFamily: fontFamily }}>
+                                    {/* Display the article title from metadata as the main heading */}
+                                    <h1 className="markdown-title" style={{ fontFamily: fontFamily }}>{metaTitle || 'Untitled'}</h1>
                                     <ReactMarkdown
                                         remarkPlugins={[remarkGfm]}
                                         rehypePlugins={[rehypeSanitize]}
@@ -538,7 +627,7 @@ export default function ReaderPage() {
                     <ol>
                         {queue.map((it, i) => (
                             <li key={it} className={i === index ? 'active' : ''} onClick={() => setIndex(i)}>
-                                <div className="queue-title">{(metas[it] && metas[it].title) ? metas[it].title : it}</div>
+                                <div className="queue-title">{(metas[it] && (metas[it].title || metas[it]?.meta?.title)) ? (metas[it].title || metas[it]?.meta?.title) : it}</div>
                                 <button className="queue-remove" onClick={(e) => { e.stopPropagation(); removeFromQueue(i); }} aria-label="Remove">×</button>
                             </li>
                         ))}

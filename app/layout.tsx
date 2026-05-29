@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Script from 'next/script'
 import '../styles/globals.css'
 import ServiceWorkerRegister from './components/ServiceWorkerRegister'
 
@@ -45,7 +46,13 @@ export default function RootLayout({
             <body>
                 {children}
                 <ServiceWorkerRegister />
-                <script dangerouslySetInnerHTML={{ __html: `if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(regs => { if (!regs || regs.length === 0) navigator.serviceWorker.register('/sw.js').catch(()=>{}); });` }} />
+                <Script
+                    id="sw-register"
+                    strategy="afterInteractive"
+                    dangerouslySetInnerHTML={{
+                        __html: `if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(regs => { if (!regs || regs.length === 0) navigator.serviceWorker.register('/sw.js').catch(()=>{}); });`,
+                    }}
+                />
             </body>
         </html>
     )

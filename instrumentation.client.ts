@@ -1,0 +1,21 @@
+'use client';
+
+import posthog from "posthog-js"
+
+if (typeof window !== 'undefined') {
+  posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
+    api_host: "/i",
+    // Enables capturing unhandled exceptions via Error Tracking
+    capture_exceptions: true,
+    // Turn on debug in development mode
+    debug: process.env.NODE_ENV === "development",
+  });
+}
+
+// IMPORTANT: Never combine this approach with other client-side PostHog initialization approaches,
+// especially components like a PostHogProvider. instrumentation.client.ts is the correct solution
+// for initializing client-side PostHog in Next.js 16+ apps.
+
+// IMPORTANT: Never combine this approach with other client-side PostHog initialization approaches,
+// especially components like a PostHogProvider. instrumentation.client.ts is the correct solution
+// for initializing client-side PostHog in Next.js 16+ apps.
