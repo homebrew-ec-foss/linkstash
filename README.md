@@ -37,6 +37,7 @@ bunx vercel dev
 
 - `POST /api/add` - Add a new link
 - `GET /api/links` - Get all links
+- `GET /api/feed` - RSS feed of all links
 - `GET /api/health` - Health check
 - `GET /api/content/[key]` - Get content by key
 
@@ -70,6 +71,17 @@ curl "http://localhost:3000/api/content/<key>"
 - If not found you'll get a JSON `404` response: `{ "error": "Not found" }`.
 
 > Note: `/api/links` is a lightweight index and returns the link `meta` fields directly (spread into the response). It does **not** include the full `content`. Sensitive fields such as submitter identifiers (`submittedBy`) and room identifiers (`roomId`) are stripped from API responses, but room comments (`roomComment`) are preserved and included in responses. Use `/api/content/<key>` to fetch the stored markdown or content for a link.
+
+### RSS feed (GET)
+
+```bash
+curl "http://localhost:3000/api/feed"
+```
+
+- Returns an RSS 2.0 XML feed of the latest links, ordered by timestamp (newest first).
+- The feed includes the link title, URL, domain, vote count, room comment, submitter attribution, tags, and an excerpt.
+- Supports `mode` (`latest`, `top`) and `limit` query parameters, matching `/api/links` behavior.
+- Defaults to the 50 most recent links (max 200).
 
 ### Get metadata by URL (GET)
 

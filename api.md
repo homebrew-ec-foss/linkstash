@@ -66,6 +66,27 @@ The ash application sends this data based on configuration flags in `config.json
 
 Both flags are optional and can be set per room.
 
+### GET /api/feed
+
+Returns an RSS 2.0 XML feed of links in the collection, ordered by newest first.
+
+The feed includes attribution (submitter), room comment, tags, vote count, domain, and an excerpt for each link.
+
+#### Query Parameters
+
+- `mode` (optional): Ranking mode. Values: `latest` (default), `top`
+- `limit` (optional): Number of items to include (default: 50, max: 200)
+
+#### Example curl commands
+
+```bash
+# Get RSS feed
+curl "https://linkstash.hsp-ec.xyz/api/feed"
+
+# Get top-voted feed
+curl "https://linkstash.hsp-ec.xyz/api/feed?mode=top&limit=20"
+```
+
 ### GET /api/links
 
 Retrieves all links in the collection, ordered by timestamp (newest first).

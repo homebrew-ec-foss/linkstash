@@ -8,6 +8,11 @@ export const metadata: Metadata = {
     title: 'HSP Linkstash',
     description: 'linkstash is a small experiment for collecting and sharing interesting links and articles you find during the week',
     metadataBase: new URL('https://linkstash.hsp-ec.xyz'),
+    alternates: {
+        types: {
+            'application/rss+xml': '/api/feed',
+        },
+    },
     icons: {
         icon: '/favicon.png',
         shortcut: '/favicon.png',
@@ -42,6 +47,7 @@ export default function RootLayout({
                 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
                 <link rel="icon" href="/favicon.png" />
                 <link rel="manifest" href="/manifest.json" />
+                <link rel="alternate" type="application/rss+xml" title="HSP Linkstash" href="/api/feed" />
                 <meta name="theme-color" content="#0f172a" />
             </head>
             <body>
