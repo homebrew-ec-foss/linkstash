@@ -16,15 +16,17 @@ function formatRssDate(ts: number): string {
 }
 
 function buildRssXml(items: string, origin: string): string {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  return `<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<?xml-stylesheet href="${origin}/feed.xsl" type="text/xsl"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>HSP Linkstash</title>
     <link>${origin}</link>
     <description>linkstash is a small experiment for collecting and sharing interesting links and articles you find during the week</description>
     <language>en</language>
+    <webMaster>mail@hsp-ec.xyz</webMaster>
     <lastBuildDate>${formatRssDate(Date.now())}</lastBuildDate>
-    <atom:link href="${origin}/api/feed" rel="self" type="application/rss+xml"/>
+    <atom:link href="${origin}/api/feed" rel="self" type="application/rss+xml" />
     ${items}
   </channel>
 </rss>`;
@@ -41,6 +43,7 @@ function buildItemXml(link: {
   roomComment?: string;
   tags?: string[];
   summary?: string;
+  content?: string;
 }): string {
   const descParts: string[] = [];
 
@@ -48,37 +51,35 @@ function buildItemXml(link: {
     descParts.push(`<strong>Room:</strong> ${escapeXml(link.roomComment)}`);
   }
 
-  if (link.submittedBy) {
-    descParts.push(`<strong>Submitted by:</strong> ${escapeXml(link.submittedBy)}`);
-  }
-
   descParts.push(`<strong>Domain:</strong> ${escapeXml(link.domain)}`);
   descParts.push(`<strong>Votes:</strong> ${link.count}`);
 
-  if (link.summary) {
+  if (link.content) {
+    descParts.push(escapeXml(link.content));
+  } else if (link.summary) {
     descParts.push(escapeXml(link.summary));
   }
 
   const description = descParts.join('<br/>\n');
 
   const categories = (link.tags || [])
-    .map(t => `    <category>${escapeXml(t)}</category>`)
+    .map(t => `      <category>${escapeXml(t)}</category>`)
     .join('\n');
 
   const roomCategory = link.roomComment
-    ? `\n    <category>${escapeXml(link.roomComment)}</category>`
+    ? `\n      <category>${escapeXml(link.roomComment)}</category>`
     : '';
 
-  const creator = link.submittedBy
-    ? `\n    <dc:creator>${escapeXml(link.submittedBy)}</dc:creator>`
+  const author = link.submittedBy
+    ? `\n      <author>${escapeXml(link.submittedBy)}</author>`
     : '';
 
   return `    <item>
       <title>${escapeXml(link.title)}</title>
       <link>${escapeXml(link.url)}</link>
-      <guid isPermaLink="false">${escapeXml(link.id)}</guid>
-      <pubDate>${formatRssDate(link.ts)}</pubDate>
-      <description>${description}</description>${categories}${roomCategory}${creator}
+      <pubDate>${formatRssDate(link.ts)}</pubDate>${author}
+      <guid>${escapeXml(link.id)}</guid>
+      <description>${description}</description>${categories}${roomCategory}
     </item>`;
 }
 
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     const result = await client.execute({
-      sql: `SELECT l.id, l.url, li.domain, l.submitted_by, li.ts, l.count, COALESCE(l.meta, li.meta) as meta
+      sql: `SELECT l.id, l.url, l.content, li.domain, l.submitted_by, li.ts, l.count, COALESCE(l.meta, li.meta) as meta
             FROM link_index li
             LEFT JOIN links l ON l.id = li.link_id
             ${orderClause}
@@ -135,6 +136,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         roomComment,
         tags,
         summary,
+        content: (row.content as string) || undefined,
       });
     });
 
