@@ -13,16 +13,51 @@ export interface LinkRecord {
 
 // content is stored inline on the links table now; no separate ContentRecord
 
+// Lazy-initialize client to avoid errors during build when TURSO_DATABASE_URL is undefined
+let _client: Client | null = null;
 
-const client: Client = createClient({
-  url: process.env.TURSO_DATABASE_URL!,
-  authToken: process.env.TURSO_AUTH_TOKEN!,
-});
+function getClient(): Client {
+  if (!_client) {
+    if (!process.env.TURSO_DATABASE_URL) {
+      throw new Error('TURSO_DATABASE_URL environment variable is not set');
+    }
+    _client = createClient({
+      url: process.env.TURSO_DATABASE_URL,
+      authToken: process.env.TURSO_AUTH_TOKEN!,
+    });
+  }
+  return _client;
+}
+
+// Proxy to allow existing code to use `client.execute()` while lazily initializing
+const client = new Proxy({}, {
+  get: (target, prop) => {
+    if (prop === 'execute') {
+      return async (sql: any, args?: any[]) => {
+        try {
+          return await getClient().execute(sql, args);
+        } catch (error) {
+          // During build with missing env var, return empty result
+          if (error instanceof Error && error.message.includes('TURSO_DATABASE_URL')) {
+            return { rows: [], columns: [] };
+          }
+          throw error;
+        }
+      };
+    }
+    return undefined;
+  }
+}) as any as Client;
 
 let attemptedVectorIndexInit = false;
 
 // Initialize database schema
 export async function initDb(): Promise<void> {
+  // Skip initialization during build when database URL is not available
+  if (!process.env.TURSO_DATABASE_URL) {
+    return;
+  }
+
   await client.execute(`
     CREATE TABLE IF NOT EXISTS links (
       id TEXT PRIMARY KEY,

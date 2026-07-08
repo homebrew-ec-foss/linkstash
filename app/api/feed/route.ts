@@ -146,7 +146,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return new NextResponse(xml, {
       status: 200,
       headers: {
-        'Content-Type': 'application/rss+xml; charset=utf-8',
+        'Content-Type': 'application/xml; charset=utf-8',
         'Cache-Control': 'public, max-age=600, s-maxage=600',
       },
     });
