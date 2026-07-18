@@ -9,3 +9,13 @@ tsconfig.tsbuildinfo
 scripts/import-test.sh
 .claude
 .env*
+
+# OpenNext
+.open-next
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+
+!.env.example

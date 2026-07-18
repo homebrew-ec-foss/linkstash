@@ -5,13 +5,18 @@
   "main": "api/index.js",
   "scripts": {
     "build": "next build",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
     "dev": "next dev",
     "start": "next start",
     "db:init": "bun run scripts/db-init.ts",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
+    "@opennextjs/cloudflare": "^1.20.1",
     "lucide-react": "^1.23.0",
     "next": "^16.2.10",
     "posthog-js": "^1.398.5",
@@ -28,7 +33,8 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "typescript": "^6.0.3",
-    "vercel": "^54.21.1"
+    "vercel": "^54.21.1",
+    "wrangler": "^4.112.0"
   },
   "keywords": [
     "links",

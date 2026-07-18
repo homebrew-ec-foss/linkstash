@@ -1,0 +1,44 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "main": ".open-next/worker.js",
+  "name": "linkstash",
+  "compatibility_date": "2026-07-18",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "linkstash"
+    }
+  ],
+
+  "images": {
+    "binding": "IMAGES"
+  },
+
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": true
+    },
+  },
+
+  "vars": {
+    "LAVA_URL": "https://lava-linkstash.onrender.com"
+  },
+
+  "routes": [
+    {
+      "pattern": "linkstash.hsp-ec.xyz",
+      "custom_domain": true
+    }
+  ]
+}
