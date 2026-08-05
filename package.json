@@ -16,25 +16,25 @@
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
-    "@opennextjs/cloudflare": "^1.20.1",
-    "lucide-react": "^1.23.0",
-    "next": "^16.2.10",
-    "posthog-js": "^1.398.5",
-    "posthog-node": "^5.40.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "@opennextjs/cloudflare": "^1.20.2",
+    "lucide-react": "^1.28.0",
+    "next": "^16.3.0",
+    "posthog-js": "^1.413.2",
+    "posthog-node": "^5.48.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^26.1.1",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "typescript": "^6.0.3",
-    "vercel": "^54.21.1",
-    "wrangler": "^4.112.0"
+    "@types/node": "^26.1.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "typescript": "^7.0.2",
+    "vercel": "^58.7.0",
+    "wrangler": "^4.119.0"
   },
   "keywords": [
     "links",
