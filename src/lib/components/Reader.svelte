@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import posthog from 'posthog-js';
+	import Header from '$lib/components/Header.svelte';
 	import { renderMarkdown } from '$lib/markdown';
 	import { extractFirstHeading } from '$lib/text-utils';
 	import { getLinksCacheKey, getFromLocalStorage, setToLocalStorage } from '$lib/utils/storage';
-	import { READER_CONTENT_LOAD_TIMEOUT_MS } from '$lib/constants';
+	import { READER_CONTENT_LOAD_TIMEOUT_MS, SETTINGS_READER_FONT_KEY } from '$lib/constants';
 
 	interface SuggestedItem {
 		id: string;
@@ -41,6 +42,9 @@
 
 	const currentId = $derived(queue.length > 0 ? queue[index] : undefined);
 	const currentMeta = $derived(currentId ? metas[currentId] : null);
+	const readerFontClass = $derived(
+		getFromLocalStorage<string>(SETTINGS_READER_FONT_KEY) === 'serif' ? '' : 'reader-font-sans'
+	);
 
 	$effect(() => {
 		const handleOnline = () => (isOnline = true);
@@ -55,8 +59,8 @@
 	});
 
 	$effect(() => {
-		const path = $page.url.pathname;
-		const hash = $page.url.hash.replace(/^#/, '');
+		const path = page.url.pathname;
+		const hash = page.url.hash.replace(/^#/, '');
 
 		const readLocation = async () => {
 			const pathMatch = path.match(/^\/reader\/([^\/]+)$/);
@@ -376,7 +380,8 @@
 
 	function getHost(url: string): string {
 		try {
-			return new URL(url).hostname;
+			const host = new URL(url).hostname;
+			return host.replace(/^www\./, '');
 		} catch {
 			return '';
 		}
@@ -384,33 +389,29 @@
 </script>
 
 <div class="reader" ontouchstart={handleTouchStart} ontouchend={handleTouchEnd}>
-	<div class="container">
-		<header class="reader-header">
-			<div class="reader-header-row">
-				<div class="reader-title">
-					{#if currentMeta?.url}
-						<a href={currentMeta.url} target="_blank" rel="noopener noreferrer">
-							{getHost(currentMeta.url)}
-						</a>
-						<span class="reader-source">{currentMeta.meta?.title || extracted.h1 || currentMeta.title || currentId}</span>
-					{:else}
-						{metaTitle || 'Reader'}
+	<Header>
+		<div class="reader-context">
+			{#if currentMeta?.url}
+				<a class="reader-source" href={currentMeta.url} target="_blank" rel="noopener noreferrer">
+					{getHost(currentMeta.url)}
+				</a>
+			{:else}
+				<span class="reader-title">{metaTitle || 'Reader'}</span>
+			{/if}
+			{#if !isOnline || isFromCache}
+				<span class="reader-status">
+					{#if !isOnline}
+						<span class="status-badge offline">Offline</span>
 					{/if}
-				</div>
-				{#if !isOnline || isFromCache}
-					<div class="reader-status">
-						{#if !isOnline}
-							<span class="status-badge offline">Offline</span>
-						{/if}
-						{#if isFromCache}
-							<span class="status-badge cached">Cached</span>
-						{/if}
-					</div>
-				{/if}
-			</div>
-		</header>
+					{#if isFromCache}
+						<span class="status-badge cached">Cached</span>
+					{/if}
+				</span>
+			{/if}
+		</div>
+	</Header>
 
-		<main class="reader-content">
+	<main class="reader-content {readerFontClass}">
 			{#if loading}
 				<div class="loading">Loading…</div>
 			{:else if error}
@@ -422,14 +423,14 @@
 				</article>
 
 				{#if relatedItems.length > 0 || relatedGroups.length > 0}
-					<hr style="margin: 2rem 0; border-top: 1px solid var(--border);" />
+					<hr class="related-divider" />
 
 					{#if relatedItems.length > 0}
 						<h3 class="related-heading">Related</h3>
-						<ul style="list-style: none; padding: 0; margin: 0;">
+						<ul class="related-list">
 							{#each relatedItems.slice(0, 8) as item (item.id)}
-								<li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border);">
-									<a href="/reader/{item.id}" class="related-item-title" style="color: var(--link); border-bottom-color: transparent;">{item.title}</a>
+								<li class="related-list-item">
+									<a href="/reader/{item.id}" class="related-item-title">{item.title}</a>
 									<div class="related-item-meta">
 										{item.domain} • {Math.round(item.score * 100)}%
 									</div>
@@ -440,9 +441,9 @@
 
 					{#if relatedGroups.length > 0}
 						<h3 class="related-heading">Groups</h3>
-						<ul style="list-style: none; padding: 0; margin: 0;">
+						<ul class="related-list">
 							{#each relatedGroups.slice(0, 6) as group (group.name)}
-								<li style="padding: 0.25rem 0; display: flex; justify-content: space-between; border-bottom: 1px solid var(--border);">
+								<li class="related-list-item related-group-row">
 									<span class="related-group-item">{group.name}</span>
 									<strong class="related-group-count">{group.count}</strong>
 								</li>
@@ -454,7 +455,6 @@
 				<div class="empty">No content.</div>
 			{/if}
 		</main>
-	</div>
 
 	{#if queue.length > 1}
 		<footer class="reader-footer">
@@ -495,26 +495,6 @@
 		gap: 0.75rem;
 	}
 
-	.status-badge {
-		font-family: Inter, system-ui, sans-serif;
-		font-size: 0.6875rem;
-		padding: 0.125rem 0.375rem;
-		border-radius: 2px;
-		font-weight: 500;
-		text-transform: uppercase;
-		letter-spacing: 0.03em;
-	}
-
-	.status-badge.offline {
-		background: #ef4444;
-		color: white;
-	}
-
-	.status-badge.cached {
-		background: #f59e0b;
-		color: white;
-	}
-
 	.reader-btn {
 		padding: 0.25rem 0.625rem;
 		border: 1px solid var(--border);
@@ -538,49 +518,34 @@
 		cursor: default;
 	}
 
-	.reader-header-row {
+	.related-divider {
+		margin: 2rem 0;
+		border: none;
+		border-top: 1px solid var(--border);
+	}
+
+	.related-list {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+	}
+
+	.related-list-item {
+		padding: 0.5rem 0;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.related-group-row {
+		padding: 0.25rem 0;
 		display: flex;
-		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
-		flex-wrap: wrap;
-	}
-
-	.reader-title {
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: var(--fg);
-		font-family: Inter, system-ui, sans-serif;
-	}
-
-	.reader-title a {
-		color: var(--fg);
-		border-bottom-color: transparent;
-	}
-
-	.reader-title a:hover {
-		color: var(--accent);
-		border-bottom-color: var(--accent);
-	}
-
-	.reader-source {
-		font-size: 0.75rem;
-		color: var(--muted);
-		margin-left: 0.5rem;
-		font-family: Inter, system-ui, sans-serif;
-	}
-
-	.reader-status {
-		display: flex;
-		gap: 0.375rem;
-		margin-top: 0.5rem;
-		font-size: 0.75rem;
-		font-family: Inter, system-ui, sans-serif;
 	}
 
 	.related-item-title {
 		font-family: Inter, system-ui, sans-serif;
 		font-size: 0.875rem;
+		color: var(--link);
+		border-bottom-color: transparent;
 	}
 
 	.related-item-meta {

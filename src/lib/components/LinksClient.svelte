@@ -33,12 +33,6 @@
 		compactMode = getFromLocalStorage<boolean>(SETTINGS_LAYOUT_KEY) ?? false;
 	});
 
-	function toggleCompact() {
-		compactMode = !compactMode;
-		setToLocalStorage(SETTINGS_LAYOUT_KEY, compactMode);
-		posthog.capture('layout_toggled', { layout: compactMode ? 'compact' : 'card' });
-	}
-
 	// svelte-ignore state_referenced_locally -- initialPage is read once to seed the store
 	const store = createPaginatedLinks(() => rankMode, initialPage);
 
@@ -94,34 +88,27 @@
 </script>
 
 <Header
-		links={store.links || []}
-		onOpenReader={() => {
-			const firstLink = store.links?.find((l) => Boolean(l.id));
-			if (firstLink) handleOpenReader(firstLink);
-		}}
-		compact={compactMode}
-		onToggleCompact={toggleCompact}
-		suggestionsExpanded={suggestionsExpanded}
-		onToggleSuggestions={() => (suggestionsExpanded = !suggestionsExpanded)}
+	suggestionsExpanded
+	onToggleSuggestions={() => (suggestionsExpanded = !suggestionsExpanded)}
+/>
+
+<div>
+	<SuggestionsPanel
+		isExpanded={suggestionsExpanded}
+		onToggle={() => (suggestionsExpanded = !suggestionsExpanded)}
+		isLoading={suggestedLoading}
+		sourceTitle={suggestedSourceTitle}
+		{suggestedItems}
+		{suggestedGroups}
 	/>
 
-	<div>
-		<SuggestionsPanel
-			isExpanded={suggestionsExpanded}
-			onToggle={() => (suggestionsExpanded = !suggestionsExpanded)}
-			isLoading={suggestedLoading}
-			sourceTitle={suggestedSourceTitle}
-			suggestedItems={suggestedItems}
-			suggestedGroups={suggestedGroups}
-		/>
-
-		<LinksList
-			groups={dateGroups}
-			compact={compactMode}
-			isLoading={store.isLoading}
-			isRefreshed={store.isRefreshed}
-			hasMore={store.hasMore}
-			onOpenReader={handleOpenReader}
-			onLoadMore={store.loadMore}
-		/>
-	</div>
+	<LinksList
+		groups={dateGroups}
+		compact={compactMode}
+		isLoading={store.isLoading}
+		isRefreshed={store.isRefreshed}
+		hasMore={store.hasMore}
+		onOpenReader={handleOpenReader}
+		onLoadMore={store.loadMore}
+	/>
+</div>

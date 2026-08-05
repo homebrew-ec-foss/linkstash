@@ -1,65 +1,28 @@
 <script lang="ts">
-	import { BookOpen, ExternalLink, LayoutGrid, Rows3, Sparkles } from 'lucide-svelte';
+	import { ExternalLink, Settings, Sparkles } from 'lucide-svelte';
 	import posthog from 'posthog-js';
-	import type { Link } from '$lib/types';
+	import type { Snippet } from 'svelte';
 
 	interface Props {
-		links: Link[];
-		onOpenReader: () => void;
-		compact?: boolean;
-		onToggleCompact?: () => void;
 		suggestionsExpanded?: boolean;
 		onToggleSuggestions?: () => void;
+		children?: Snippet;
 	}
 
 	let {
-		links,
-		onOpenReader,
-		compact = false,
-		onToggleCompact,
 		suggestionsExpanded = false,
-		onToggleSuggestions
+		onToggleSuggestions,
+		children
 	}: Props = $props();
-
-	function handleReaderClick() {
-		posthog.capture('reader_opened', {
-			total_links: links.length
-		});
-		onOpenReader();
-	}
 </script>
 
 <header class="header">
 	<div class="container header-row">
 		<a href="/" class="site-title">linkstash</a>
+		{#if children}
+			<div class="header-context">{@render children()}</div>
+		{/if}
 		<div class="header-actions">
-			{#if onToggleCompact}
-				<button
-					type="button"
-					class="icon-btn"
-					title={compact ? 'Switch to card view' : 'Switch to compact rows'}
-					aria-label={compact ? 'Switch to card view' : 'Switch to compact rows'}
-					aria-pressed={compact}
-					onclick={onToggleCompact}
-				>
-					{#if compact}
-						<LayoutGrid size={14} />
-					{:else}
-						<Rows3 size={14} />
-					{/if}
-				</button>
-			{/if}
-
-			<button
-				type="button"
-				class="icon-btn"
-				title="Open reading view"
-				aria-label="Open reading view"
-				onclick={handleReaderClick}
-			>
-				<BookOpen size={14} />
-			</button>
-
 			{#if onToggleSuggestions}
 				<button
 					type="button"
@@ -72,6 +35,14 @@
 					<Sparkles size={14} />
 				</button>
 			{/if}
+
+			<a
+				href="/settings"
+				class="icon-btn"
+				aria-label="Settings"
+			>
+				<Settings size={14} />
+			</a>
 
 			<a
 				href="https://github.com/homebrew-ec-foss/linkstash"

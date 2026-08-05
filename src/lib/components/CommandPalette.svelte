@@ -20,6 +20,24 @@
 
 	let debounceTimer: number | undefined;
 
+	// Cache the full link list for the lifetime of an open palette session so
+	// repeated keystrokes filter in-memory instead of re-fetching (AGENTS.md:
+	// never hit `?limit=10000` on every keystroke).
+	let allLinksCache: Result[] | null = null;
+
+	async function getAllLinks(): Promise<Result[]> {
+		if (allLinksCache) return allLinksCache;
+		const response = await fetch('/api/links?limit=10000&offset=0&mode=latest');
+		if (!response.ok) return [];
+		const data = await response.json();
+		allLinksCache = (data.items || data || []) as Result[];
+		return allLinksCache;
+	}
+
+	$effect(() => {
+		if (!isOpen) allLinksCache = null;
+	});
+
 	$effect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
 			if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -55,13 +73,7 @@
 		debounceTimer = window.setTimeout(async () => {
 			loading = true;
 			try {
-				const response = await fetch('/api/links?limit=10000&offset=0&mode=latest');
-				if (!response.ok) {
-					loading = false;
-					return;
-				}
-				const data = await response.json();
-				const allLinks = data.items || data || [];
+				const allLinks = await getAllLinks();
 				const q = query.toLowerCase();
 				const queryWords = q.split(/\s+/).filter(Boolean);
 
@@ -141,11 +153,11 @@
 			</div>
 
 			{#if loading}
-				<div class="cmd-results"><div style="padding: 12px; text-align: center; color: var(--muted);">Searching...</div></div>
+				<div class="cmd-results"><div class="cmd-status">Searching...</div></div>
 			{:else if results.length === 0 && search}
-				<div class="cmd-results"><div style="padding: 12px; text-align: center; color: var(--muted);">No articles found</div></div>
+				<div class="cmd-results"><div class="cmd-status">No articles found</div></div>
 			{:else if results.length === 0}
-				<div class="cmd-results"><div style="padding: 12px; text-align: center; color: var(--muted);">Start typing to search articles</div></div>
+				<div class="cmd-results"><div class="cmd-status">Start typing to search articles</div></div>
 			{:else}
 				<div class="cmd-results">
 					{#each results as result, idx (result.id)}
@@ -168,7 +180,7 @@
 				</div>
 			{/if}
 
-			<div style="padding: 8px 12px; border-top: 1px solid var(--border); font-size: 10px; color: var(--muted); display: flex; gap: 12px;">
+			<div class="cmd-hints">
 				<span>↑ ↓ to navigate</span>
 				<span>ENTER to open</span>
 				<span>ESC to close</span>

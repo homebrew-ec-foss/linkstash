@@ -11,3 +11,5 @@ export const LINKS_CACHE_PREFIX = 'links_cache';
 
 // UI preferences (persisted in localStorage)
 export const SETTINGS_LAYOUT_KEY = 'settings_layout';
+export const SETTINGS_THEME_KEY = 'settings_theme';
+export const SETTINGS_READER_FONT_KEY = 'settings_reader_font';

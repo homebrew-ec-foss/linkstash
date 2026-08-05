@@ -242,10 +242,22 @@
 		<button class="admin-btn" onclick={() => { from = ''; to = ''; query = ''; }}>Reset</button>
 	</div>
 
-	<div style="display: flex; gap: 0.375rem; flex-wrap: wrap; margin-bottom: 1rem;">
-		<button class="admin-btn" onclick={() => room = ''} style="background: {room === '' ? 'var(--accent)' : 'var(--card)'}; color: {room === '' ? '#fff' : 'var(--fg)'}; border-color: {room === '' ? 'var(--accent)' : 'var(--border)'};">All rooms</button>
+	<div class="room-filter">
+		<button
+			type="button"
+			class="admin-btn room-filter-btn"
+			class:active={room === ''}
+			onclick={() => (room = '')}
+		>
+			All rooms
+		</button>
 		{#each data?.rooms || [] as roomItem (roomItem.name)}
-			<button class="admin-btn" onclick={() => room = roomItem.name} style="background: {roomItem.name === room ? 'var(--accent)' : 'var(--card)'}; color: {roomItem.name === room ? '#fff' : 'var(--fg)'}; border-color: {roomItem.name === room ? 'var(--accent)' : 'var(--border)'};">
+			<button
+				type="button"
+				class="admin-btn room-filter-btn"
+				class:active={roomItem.name === room}
+				onclick={() => (room = roomItem.name)}
+			>
 				{roomItem.name} ({roomItem.total})
 			</button>
 		{/each}
@@ -266,18 +278,18 @@
 		</div>
 	</div>
 
-	<div style="margin-top: 2rem;">
-		<h3 style="font-size: 0.75rem; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.5rem;">Calendar view</h3>
-		<p style="font-size: 0.75rem; color: var(--muted); margin-bottom: 0.75rem;">
+	<div class="calendar-section">
+		<h3 class="calendar-heading">Calendar view</h3>
+		<p class="calendar-subtitle">
 			{selectedDay ? formatLongDay(selectedDay) : 'Select a day with activity'}
 		</p>
 
-		<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.25rem; font-size: 0.6875rem; color: var(--muted); text-align: center; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.25rem;">
+		<div class="calendar-weekdays">
 			<span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
 		</div>
 
-		<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.25rem;">
-			{#each Array(calendarOffset) as _, idx}
+		<div class="calendar-grid">
+			{#each Array(calendarOffset) as _, idx (idx)}
 				<div></div>
 			{/each}
 
@@ -286,33 +298,20 @@
 				{@const intensity = getIntensity(count)}
 				<button
 					type="button"
-					onclick={() => selectedDay = day}
+					class="calendar-day"
+					class:selected={selectedDay === day}
+					onclick={() => (selectedDay = day)}
 					title="{day}: {count} links"
-					style="
-						height: 2.5rem;
-						border: 1px solid var(--border);
-						background: {getIntensityColor(intensity)};
-						color: var(--fg);
-						cursor: pointer;
-						display: flex;
-						flex-direction: column;
-						justify-content: flex-start;
-						align-items: flex-start;
-						padding: 0.25rem;
-						font-size: 0.75rem;
-						text-align: left;
-						border-radius: var(--radius);
-						{selectedDay === day ? 'border-color: var(--accent); outline: 1px solid var(--accent);' : ''}
-					"
+					style:background={getIntensityColor(intensity)}
 				>
-					<span style="font-weight: 500;">{new Date(`${day}T00:00:00Z`).getUTCDate()}</span>
-					<span style="font-size: 0.6875rem; opacity: 0.8;">{count > 0 ? count : ''}</span>
+					<span class="calendar-day-number">{new Date(`${day}T00:00:00Z`).getUTCDate()}</span>
+					<span class="calendar-day-count">{count > 0 ? count : ''}</span>
 				</button>
 			{/each}
 		</div>
 	</div>
 
-	<div style="margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+	<div class="summary-list-section">
 		{#if loading}
 			<div class="loading">Loading summary...</div>
 		{:else if error}
@@ -351,7 +350,7 @@
 		{/if}
 	</div>
 
-	<p style="margin-top: 2rem; text-align: center;">
-		<a href="/" style="color: var(--muted); font-size: 0.875rem;">Back to feed</a>
+	<p class="summary-back">
+		<a href="/" class="summary-back-link">Back to feed</a>
 	</p>
 </div>

@@ -6,7 +6,5 @@
 </script>
 
 <main class="app-main">
-	<div class="container" role="main">
-		<LinksClient initialPage={data.page} />
-	</div>
+	<LinksClient initialPage={data.page} />
 </main>

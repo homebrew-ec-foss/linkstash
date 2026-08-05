@@ -48,17 +48,31 @@
 	}
 </script>
 
-{#if registered}
-	<div style="position: fixed; bottom: 12px; right: 12px; z-index: 9999">
-		{#if updateAvailable}
-			<div
-				style="background: var(--card); padding: 0.5rem 0.75rem; border: 1px solid var(--border)"
-			>
-				<div style="margin-bottom: 0.375rem">Update available</div>
-				<div style="display: flex; gap: 0.5rem">
-					<button onclick={refreshAndReload}>Reload</button>
-				</div>
-			</div>
-		{/if}
+{#if registered && updateAvailable}
+	<div class="sw-toast">
+		<div class="sw-toast-message">Update available</div>
+		<button type="button" class="admin-btn" onclick={refreshAndReload}>Reload</button>
 	</div>
 {/if}
+
+<style>
+	.sw-toast {
+		position: fixed;
+		bottom: 0.75rem;
+		right: 0.75rem;
+		z-index: 9999;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		background: var(--card);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		padding: 0.75rem;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+	}
+
+	.sw-toast-message {
+		font-size: 0.875rem;
+		color: var(--fg);
+	}
+</style>

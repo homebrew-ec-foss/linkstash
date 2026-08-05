@@ -103,7 +103,7 @@
 	</div>
 
 	{#if error}
-		<div style="color: var(--brand); margin-bottom: 8px">{error}</div>
+		<div class="admin-error">{error}</div>
 	{/if}
 
 	{#if loading}
@@ -112,19 +112,19 @@
 		<table class="admin-table">
 			<thead>
 				<tr>
-					<th style="width: 240px">ID</th>
+					<th class="id-col">ID</th>
 					<th>Title / URL</th>
-					<th style="width: 100px"></th>
+					<th class="actions-col"></th>
 				</tr>
 			</thead>
 			<tbody>
 				{#each filtered as l (l.id)}
 					<tr>
-						<td class="id-cell" style="width: 240px" title={l.id}><code>{shortId(l.id)}</code></td>
+						<td class="id-cell" title={l.id}><code>{shortId(l.id)}</code></td>
 						<td>
 							<div>{l.meta?.title || l.meta?.text || l.meta?.url || l.url}</div>
 						</td>
-						<td style="text-align: right">
+						<td class="text-right">
 							<button
 								class="admin-btn delete"
 								disabled={Boolean(deleting[l.id])}
@@ -139,7 +139,7 @@
 		</table>
 	{/if}
 
-	<div style="margin-top: 10px">
+	<div class="admin-footer">
 		<button class="admin-btn" onclick={fetchLinks}>Refresh</button>
 	</div>
 </div>
