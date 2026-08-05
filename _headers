@@ -1,0 +1,7 @@
+# Cloudflare Workers static asset headers.
+# Cache-Control for immutable hashed assets is appended automatically by the
+# SvelteKit adapter. These apply to static asset responses only.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin

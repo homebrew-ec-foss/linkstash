@@ -9,17 +9,44 @@
 
 ## How it works
 
-1. `ash` detects links posted to a WhatsApp group (bridged to Matrix) and forwards them to the Vercel API.
+1. `ash` detects links posted to a WhatsApp group (bridged to Matrix) and forwards them to the Cloudflare Worker API.
 2. `linkstash` calls the Markdown parser (`defuddle.md` by default) and stores the markdown +
    rich frontmatter in Turso
-3. The Vercel app lists saved links and renders the parsed Markdown in a Hacker News–style feed.
+3. The app lists saved links and renders the parsed Markdown in a Hacker News–style feed.
+
+## Stack
+
+- **SvelteKit** (App Router, runes) + **Vite**, TypeScript (strict)
+- Deployed to **Cloudflare Workers** via `@sveltejs/adapter-cloudflare`
+- `@libsql/client` (Turso), PostHog analytics
+- Package manager: **bun** (`bun.lock`). Do not commit a `package-lock.json` or `yarn.lock`.
 
 ## Quick start
 
 ```bash
 bun install
 cp .env.example .env
-bunx vercel dev
+bun run dev                 # vite dev server (http://localhost:3000)
+```
+
+To preview the production Worker build locally:
+
+```bash
+cp .env.example .dev.vars  # wrangler reads secrets from .dev.vars (gitignored)
+bun run build              # vite build -> .cloudflare/worker.js + .cloudflare/static
+bunx wrangler dev          # run the built Worker on http://localhost:8787
+```
+
+## Commands
+
+```bash
+bun run dev            # vite dev
+bun run build          # vite build (adapter-cloudflare)
+bun run check          # svelte-check (type-check + lint warnings)
+bun run preview        # build + wrangler dev
+bun run deploy         # build + wrangler deploy (requires wrangler auth)
+bun run db:init        # initialize the Turso DB schema
+bun run cf-typegen     # regenerate cloudflare-env.d.ts from wrangler.jsonc
 ```
 
 ## Environment Variables
@@ -27,19 +54,25 @@ bunx vercel dev
 - `AUTH_KEY`: Your authentication key
 - `TURSO_DATABASE_URL`: Your Turso database URL
 - `TURSO_AUTH_TOKEN`: Your Turso auth token
+- `PUBLIC_POSTHOG_KEY` / `PUBLIC_POSTHOG_HOST`: PostHog analytics (client + server)
+- `VOTE_COOLDOWN_MS`: Cooldown between upvotes from the same submitter/room (default 6h)
+- `LAVA_URL`: Optional; overrides the default parser (`https://defuddle.md/`) for testing or backwards compatibility.
 
-> The old `LAVA_URL` variable is no longer required; the service will hit
-> `https://defuddle.md/` automatically.  You may still set `LAVA_URL` if you
-> want to override the parser for testing or backwards compatibility.
-
+> `PUBLIC_`-prefixed vars are exposed to the client; `AUTH_KEY`, Turso and parser
+> vars are server-only and read via `$env/dynamic/private`.
 
 ## API Endpoints
 
 - `POST /api/add` - Add a new link
-- `GET /api/links` - Get all links
+- `GET /api/links` - Get all links (paginated, supports `mode`/`offset`/`limit`/`url`)
 - `GET /api/feed` - RSS feed of all links
-- `GET /api/health` - Health check
+- `GET /api/summary` - Summary of links for a date range
 - `GET /api/content/[key]` - Get content by key
+- `GET /api/related/[key]` - Semantically related links
+- `GET /api/proxy` - SSRF-guarded URL proxy
+- `DELETE /api/admin/link` - Delete a link (admin)
+
+See [api.md](./api.md) for details.
 
 ## Admin
 
@@ -47,7 +80,8 @@ bunx vercel dev
 
 ## API examples
 
-Below are quick curl examples for local development (assumes `bunx vercel dev` on `http://localhost:3000`) and that `AUTH_KEY` is set in your environment.
+Below are quick curl examples for local development (assumes `bun run dev` or
+`bunx wrangler dev`) and that `AUTH_KEY` is set in your environment.
 
 ### Add a link (POST)
 

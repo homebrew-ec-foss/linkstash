@@ -1,44 +1,34 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "main": ".open-next/worker.js",
-  "name": "linkstash",
-  "compatibility_date": "2026-07-18",
-  "compatibility_flags": ["nodejs_compat"],
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "linkstash",
+	"compatibility_date": "2026-07-18",
+	"compatibility_flags": ["nodejs_compat"],
 
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
-  },
+	"main": ".cloudflare/worker.js",
 
-  "services": [
-    {
-      "binding": "WORKER_SELF_REFERENCE",
-      "service": "linkstash"
-    }
-  ],
+	"assets": {
+		"directory": ".cloudflare/static",
+		"binding": "ASSETS"
+	},
 
-  "images": {
-    "binding": "IMAGES"
-  },
+	"observability": {
+		"logs": {
+			"enabled": true,
+			"invocation_logs": true
+		},
+		"traces": {
+			"enabled": true
+		}
+	},
 
-  "observability": {
-    "logs": {
-      "enabled": true,
-      "invocation_logs": true
-    },
-    "traces": {
-      "enabled": true
-    },
-  },
+	"vars": {
+		"LAVA_URL": "https://lava-linkstash.onrender.com"
+	},
 
-  "vars": {
-    "LAVA_URL": "https://lava-linkstash.onrender.com"
-  },
-
-  "routes": [
-    {
-      "pattern": "linkstash.hsp-ec.xyz",
-      "custom_domain": true
-    }
-  ]
+	"routes": [
+		{
+			"pattern": "linkstash.hsp-ec.xyz",
+			"custom_domain": true
+		}
+	]
 }

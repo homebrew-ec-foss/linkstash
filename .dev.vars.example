@@ -1,14 +1,8 @@
-# Turso Database Configuration
+# Local dev secrets for `wrangler dev` / `vite dev`.
+# Copy to `.dev.vars` (gitignored) and fill in real values.
 TURSO_DATABASE_URL=your-turso-database-url-here
 TURSO_AUTH_TOKEN=your-turso-auth-token-here
-
-# Authentication Key
 AUTH_KEY=your-auth-key-here
-
-# PostHog (public, safe to ship to the browser)
 PUBLIC_POSTHOG_KEY=your-posthog-key-here
 PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
-
-# Optional
-# LAVA_URL=your-lava-parser-url-here
-# VOTE_COOLDOWN_MS=21600000
+LAVA_URL=https://lava-linkstash.onrender.com

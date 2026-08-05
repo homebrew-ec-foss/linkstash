@@ -1,39 +1,37 @@
 {
   "name": "linkstash",
   "version": "1.0.0",
+  "type": "module",
   "description": "linkstash is a small experiment for collecting and sharing interesting links and articles you find during the week",
-  "main": "api/index.js",
   "scripts": {
-    "build": "next build",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
-    "dev": "next dev",
-    "start": "next start",
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "wrangler dev",
+    "deploy": "vite build && wrangler deploy",
     "db:init": "bun run scripts/db-init.ts",
-    "type-check": "tsc --noEmit",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "type-check": "svelte-check --tsconfig ./tsconfig.json",
+    "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
-    "@opennextjs/cloudflare": "^1.20.2",
-    "lucide-react": "^1.28.0",
-    "next": "^16.3.0",
+    "@sveltejs/adapter-cloudflare": "^7.2.9",
+    "@sveltejs/kit": "^2.70.2",
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "@types/sanitize-html": "^2.16.1",
+    "js-yaml": "^5.2.3",
+    "lucide-svelte": "^1.0.1",
+    "marked": "^18.0.9",
     "posthog-js": "^1.413.2",
     "posthog-node": "^5.48.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-markdown": "^10.1.0",
-    "rehype-sanitize": "^6.0.0",
-    "remark-gfm": "^4.0.1"
+    "sanitize-html": "^2.17.6",
+    "svelte": "^5.56.8"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^26.1.2",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
-    "typescript": "^7.0.2",
-    "vercel": "^58.7.0",
+    "svelte-check": "^4.7.4",
+    "typescript": "~6",
+    "vite": "^8.2.0",
     "wrangler": "^4.119.0"
   },
   "keywords": [

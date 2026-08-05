@@ -2,20 +2,14 @@
 node_modules
 .DS_Store
 .vercel
-.env*.local
-.next
+.env*
 links.json
 tsconfig.tsbuildinfo
 scripts/import-test.sh
 .claude
-.env*
 
-# OpenNext
-.open-next
+# SvelteKit
+.svelte-kit
 
-# wrangler files
-.wrangler
-.dev.vars*
-!.dev.vars.example
-
-!.env.example
+# Cloudflare (adapter-cloudflare build output)
+.cloudflare
