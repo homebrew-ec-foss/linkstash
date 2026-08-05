@@ -52,10 +52,10 @@
 	<div style="position: fixed; bottom: 12px; right: 12px; z-index: 9999">
 		{#if updateAvailable}
 			<div
-				style="background: var(--card); padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,0.2)"
+				style="background: var(--card); padding: 0.5rem 0.75rem; border: 1px solid var(--border)"
 			>
-				<div style="margin-bottom: 6px">Update available</div>
-				<div style="display: flex; gap: 8px">
+				<div style="margin-bottom: 0.375rem">Update available</div>
+				<div style="display: flex; gap: 0.5rem">
 					<button onclick={refreshAndReload}>Reload</button>
 				</div>
 			</div>

@@ -9,6 +9,7 @@
     "preview": "wrangler dev",
     "deploy": "vite build && wrangler deploy",
     "db:init": "bun run scripts/db-init.ts",
+    "db:reindex": "bun run scripts/db-reindex.ts",
     "type-check": "svelte-check --tsconfig ./tsconfig.json",
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },

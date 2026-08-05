@@ -76,17 +76,28 @@ async function buildRowWithSource(
 	return { row, sourceText, sourceHash };
 }
 
-async function upsertEmbedding(linkId: string, sourceText: string, sourceHash: string, ts: number) {
-	const vecJson = embeddingToJson(embedText(sourceText));
-	await getClient().execute({
-		sql: `INSERT INTO link_embeddings (link_id, embedding, source_hash, ts)
+async function upsertEmbedding(
+	linkId: string,
+	sourceText: string,
+	sourceHash: string,
+	ts: number
+): Promise<boolean> {
+	try {
+		const vecJson = embeddingToJson(embedText(sourceText));
+		await getClient().execute({
+			sql: `INSERT INTO link_embeddings (link_id, embedding, source_hash, ts)
           VALUES (?, vector32(?), ?, ?)
           ON CONFLICT(link_id) DO UPDATE SET
             embedding = excluded.embedding,
             source_hash = excluded.source_hash,
             ts = excluded.ts`,
-		args: [linkId, vecJson, sourceHash, ts]
-	});
+			args: [linkId, vecJson, sourceHash, ts]
+		});
+		return true;
+	} catch (e) {
+		console.warn(`embedding upsert failed for ${linkId}, falling back to scan`, e);
+		return false;
+	}
 }
 
 async function ensureEmbeddingForLink(id: string) {
@@ -152,9 +163,15 @@ export const GET: RequestHandler = async (event) => {
 		await ensureRecentEmbeddings(50);
 
 		let relatedRows: any[] = [];
-		try {
-			const related = await getClient().execute({
-				sql: `SELECT l.id, l.url, l.domain, l.ts, l.count, COALESCE(l.meta, li.meta) AS meta,
+		const embedCheck = await getClient().execute({
+			sql: 'SELECT 1 AS has_embedding FROM link_embeddings WHERE link_id = ?',
+			args: [key]
+		});
+
+		if (embedCheck.rows.length > 0) {
+			try {
+				const related = await getClient().execute({
+					sql: `SELECT l.id, l.url, l.domain, l.ts, l.count, COALESCE(l.meta, li.meta) AS meta,
                      vector_distance_cos(le.embedding, q.embedding) AS distance
               FROM link_embeddings le
               JOIN links l ON l.id = le.link_id
@@ -163,10 +180,15 @@ export const GET: RequestHandler = async (event) => {
               WHERE le.link_id <> ?
               ORDER BY distance ASC
               LIMIT 24`,
-				args: [key, key]
-			});
-			relatedRows = related.rows as any[];
-		} catch (e) {
+					args: [key, key]
+				});
+				relatedRows = related.rows as any[];
+			} catch (e) {
+				console.warn('vector similarity search failed, using scan fallback', e);
+			}
+		}
+
+		if (relatedRows.length === 0) {
 			// Safe fallback if vector functions are unavailable.
 			const fallback = await getClient().execute({
 				sql: `SELECT l.id, l.url, l.domain, l.ts, l.count, COALESCE(l.meta, li.meta) AS meta,

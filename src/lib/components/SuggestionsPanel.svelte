@@ -23,41 +23,38 @@
 </script>
 
 {#if isExpanded}
-	<div class="home-suggestions-panel" aria-label="Homepage suggested content">
-		<div class="home-suggestions-col">
-			<div class="home-suggestions-title">Suggested Articles</div>
+	<div class="suggestions" aria-label="Homepage suggested content">
+		<div class="suggestions-block">
+			<h2 class="suggestions-title">Suggested Articles</h2>
 			{#if sourceTitle}
-				<div class="home-suggestions-subtitle">Based on: {sourceTitle}</div>
+				<p class="suggestions-source">Based on: {sourceTitle}</p>
 			{/if}
 			{#if isLoading}
-				<div class="suggestion-empty">Finding related links...</div>
+				<div class="empty">Finding related links...</div>
 			{:else if suggestedItems.length === 0}
-				<div class="suggestion-empty">No related links yet.</div>
+				<div class="empty">No related links yet.</div>
 			{:else}
-				<ol class="suggestion-list">
+				<ol class="suggestions-list">
 					{#each suggestedItems.slice(0, MAX_SUGGESTIONS_DISPLAY) as item (item.id)}
-						<li>
-							<a href={`/reader/${encodeURIComponent(item.id)}`} class="suggestion-link">
-								<span class="suggestion-title">{item.title}</span>
-								<span class="suggestion-meta">
-									{item.domain || 'unknown domain'} •{' '}
-									{Math.round((item.score || 0) * 100)}%
-								</span>
-							</a>
+						<li class="suggestion-item">
+							<a href="/reader/{item.id}">{item.title}</a>
+							<div class="suggestion-meta">
+								{item.domain || 'unknown domain'} • {Math.round((item.score || 0) * 100)}%
+							</div>
 						</li>
 					{/each}
 				</ol>
 			{/if}
 		</div>
 
-		<div class="home-suggestions-col">
-			<div class="home-suggestions-title">Suggested Groups</div>
+		<div class="suggestions-block">
+			<h2 class="suggestions-title">Suggested Groups</h2>
 			{#if suggestedGroups.length === 0}
-				<div class="suggestion-empty">No groups available.</div>
+				<div class="empty">No groups available.</div>
 			{:else}
-				<ul class="suggestion-group-list">
+				<ul class="suggestions-groups">
 					{#each suggestedGroups.slice(0, MAX_SUGGESTIONS_DISPLAY) as group (group.name)}
-						<li>
+						<li class="suggestion-group">
 							<span>{group.name}</span>
 							<strong>{group.count}</strong>
 						</li>

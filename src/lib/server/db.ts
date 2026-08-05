@@ -115,6 +115,57 @@ export async function getLinks(): Promise<any[]> {
 	return result.rows.map((row) => sanitizeLink(rowToLink(row)));
 }
 
+export interface LinksPage {
+	items: any[];
+	total: number;
+	offset: number;
+	limit: number;
+	hasMore: boolean;
+}
+
+/**
+ * Paginated, sanitized page of links for a rank mode. Shared by the
+ * `/api/links` route and the SSR `+page.server.ts` load so the server-rendered
+ * feed matches the API exactly. `rising` mode needs the full dataset and is
+ * handled in-memory by the API route.
+ */
+export async function getPaginatedLinks(options: {
+	mode?: 'latest' | 'top';
+	offset?: number;
+	limit?: number;
+}): Promise<LinksPage> {
+	await initDb();
+	const client = getClient();
+
+	const mode = options.mode === 'top' ? 'top' : 'latest';
+	const offset = options.offset && options.offset > 0 ? options.offset : 0;
+	const limit = options.limit && options.limit > 0 ? Math.min(options.limit, 200) : 50;
+
+	const orderClause = mode === 'top' ? 'ORDER BY l.count DESC, li.ts DESC' : 'ORDER BY li.ts DESC';
+
+	const result = await client.execute({
+		sql: `SELECT l.id, l.url, li.domain, l.submitted_by, li.ts, l.count, COALESCE(l.meta, li.meta) AS meta
+          FROM link_index li
+          LEFT JOIN links l ON l.id = li.link_id
+          ${orderClause}
+          LIMIT ? OFFSET ?`,
+		args: [limit, offset]
+	});
+
+	const countResult = await client.execute({
+		sql: 'SELECT COUNT(*) AS count FROM link_index',
+		args: []
+	});
+	const total = (countResult.rows[0]?.count as number) || 0;
+
+	const items = result.rows.map((row: any, idx: number) => {
+		const link = sanitizeLink(rowToLink(row));
+		return { ...link, displayIndex: offset + idx + 1 };
+	});
+
+	return { items, total, offset, limit, hasMore: offset + limit < total };
+}
+
 export async function getLinkByUrl(url: string): Promise<any | null> {
 	await initDb();
 

@@ -211,172 +211,147 @@
 		return filtered.filter((item) => dayKeyFromTs(item.ts) === selectedDay);
 	});
 
+	function getIntensity(count: number) {
+		if (count === 0) return 0;
+		if (count >= maxDayCount * 0.8) return 4;
+		if (count >= maxDayCount * 0.55) return 3;
+		if (count >= maxDayCount * 0.3) return 2;
+		return 1;
+	}
+
 	const calendarOffset = $derived.by(() => {
 		if (calendarDays.length === 0) return 0;
 		return new Date(`${calendarDays[0]}T00:00:00Z`).getUTCDay();
 	});
+
+	function getIntensityColor(intensity: number) {
+		if (intensity === 0) return 'transparent';
+		const alpha = 0.1 + intensity * 0.2;
+		return `rgba(80, 156, 147, ${alpha})`;
+	}
 </script>
 
-<main class="app-main">
-	<div class="container" role="main">
-		<div class="card summary-card">
-			<div class="summary-topbar">
-				<div>
-					<div class="summary-kicker">Timeline Mode</div>
-					<h1 class="summary-title">Link Calendar</h1>
-					<div class="summary-subtitle">
-						{formatRange(data?.from || from || null, data?.to || to || null)}
-					</div>
-				</div>
-				<a href="/" class="summary-home-link">Back to feed</a>
-			</div>
+<div class="summary">
+	<h1>Summary</h1>
+	<p class="subtitle">{formatRange(data?.from || from || null, data?.to || to || null)}</p>
 
-			<div class="summary-controls">
-				<div class="summary-control">
-					<label for="summary-from">From</label>
-					<input
-						id="summary-from"
-						type="date"
-						bind:value={from}
-						max={toIsoDay(new Date())}
-					/>
-				</div>
-				<div class="summary-control">
-					<label for="summary-to">To</label>
-					<input
-						id="summary-to"
-						type="date"
-						bind:value={to}
-						min={from || undefined}
-						max={toIsoDay(new Date())}
-					/>
-				</div>
-				<div class="summary-control summary-control-search">
-					<label for="summary-q">Search</label>
-					<input
-						id="summary-q"
-						type="text"
-						bind:value={query}
-						placeholder="Title, domain, URL, room"
-					/>
-				</div>
-			</div>
+	<div class="admin-form">
+		<input type="date" class="admin-input" bind:value={from} max={toIsoDay(new Date())} />
+		<input type="date" class="admin-input" bind:value={to} min={from || undefined} max={toIsoDay(new Date())} />
+		<input type="text" class="admin-input" bind:value={query} placeholder="Search title, domain, URL, room" />
+		<button class="admin-btn" onclick={() => { from = ''; to = ''; query = ''; }}>Reset</button>
+	</div>
 
-			<div class="summary-chip-row" role="tablist" aria-label="Room filters">
-				<button
-					type="button"
-					class="summary-chip {room === '' ? 'active' : ''}"
-					onclick={() => (room = '')}
-				>
-					All rooms
-				</button>
-				{#each data?.rooms || [] as roomItem (roomItem.name)}
-					<button
-						type="button"
-						class="summary-chip {roomItem.name === room ? 'active' : ''}"
-						onclick={() => (room = roomItem.name)}
-					>
-						{roomItem.name}
-						<span>{roomItem.total}</span>
-					</button>
-				{/each}
-			</div>
+	<div style="display: flex; gap: 0.375rem; flex-wrap: wrap; margin-bottom: 1rem;">
+		<button class="admin-btn" onclick={() => room = ''} style="background: {room === '' ? 'var(--accent)' : 'var(--card)'}; color: {room === '' ? '#fff' : 'var(--fg)'}; border-color: {room === '' ? 'var(--accent)' : 'var(--border)'};">All rooms</button>
+		{#each data?.rooms || [] as roomItem (roomItem.name)}
+			<button class="admin-btn" onclick={() => room = roomItem.name} style="background: {roomItem.name === room ? 'var(--accent)' : 'var(--card)'}; color: {roomItem.name === room ? '#fff' : 'var(--fg)'}; border-color: {roomItem.name === room ? 'var(--accent)' : 'var(--border)'};">
+				{roomItem.name} ({roomItem.total})
+			</button>
+		{/each}
+	</div>
 
-			<div class="summary-stats">
-				<div>
-					<strong>{filtered.length}</strong>
-					<span>links shown</span>
-				</div>
-				<div>
-					<strong>{totalVotes}</strong>
-					<span>total votes</span>
-				</div>
-				<div>
-					<strong>{activeRoomLabel}</strong>
-					<span>active room filter</span>
-				</div>
-			</div>
-
-			<div class="summary-calendar-card">
-				<div class="summary-calendar-head">
-					<h2>Calendar view</h2>
-					<span>{selectedDay ? formatLongDay(selectedDay) : 'Select a day with activity'}</span>
-				</div>
-
-				<div class="summary-weekdays" aria-hidden="true">
-					<span>Sun</span>
-					<span>Mon</span>
-					<span>Tue</span>
-					<span>Wed</span>
-					<span>Thu</span>
-					<span>Fri</span>
-					<span>Sat</span>
-				</div>
-
-				<div class="summary-calendar-grid">
-					{#each Array(calendarOffset) as _, idx}
-						<div class="summary-day-empty"></div>
-					{/each}
-
-					{#each calendarDays as day (day)}
-						{@const count = countsByDay.get(day) || 0}
-						{@const intensity =
-							count === 0
-								? 0
-								: count >= maxDayCount * 0.8
-									? 4
-									: count >= maxDayCount * 0.55
-										? 3
-										: count >= maxDayCount * 0.3
-											? 2
-											: 1}
-						<button
-							type="button"
-							class="summary-day-cell level-{intensity} {selectedDay === day ? 'active' : ''}"
-							onclick={() => (selectedDay = day)}
-							title="{day}: {count} links"
-						>
-							<span class="summary-day-num">{new Date(`${day}T00:00:00Z`).getUTCDate()}</span>
-							<span class="summary-day-count">{count > 0 ? count : ''}</span>
-						</button>
-					{/each}
-				</div>
-			</div>
-
-			<ol class="link-list">
-				{#if loading}
-					<li class="summary-empty">Loading summary...</li>
-				{:else if error}
-					<li class="summary-empty">{error}</li>
-				{:else if selectedDayLinks.length === 0}
-					<li class="summary-empty">No links match this filter.</li>
-				{:else}
-					{#each selectedDayLinks as item, idx (item.id || `${item.url}-${idx}`)}
-						{@const url = item.url || item.meta?.url || '#'}
-						{@const title = item.title || item.name || item.meta?.title || url}
-						{@const domain =
-							item.domain ||
-							item.meta?.domain ||
-							(() => {
-								try {
-									return new URL(url).hostname;
-								} catch (e) {
-									return '';
-								}
-							})()}
-						<li>
-							<div class="rank">{idx + 1}.</div>
-							<div class="link-main">
-								<a href={url} target="_blank" rel="noopener noreferrer" class="link-title"
-									>{title}</a
-								>
-								<div class="link-domain">{domain} - {roomName(item)}</div>
-							</div>
-							<div class="votes">{item.count ? `${item.count} votes` : ''}</div>
-						</li>
-					{/each}
-				{/if}
-			</ol>
+	<div class="summary-stats">
+		<div class="summary-stat">
+			<div class="summary-stat-value">{filtered.length}</div>
+			<div class="summary-stat-label">links shown</div>
+		</div>
+		<div class="summary-stat">
+			<div class="summary-stat-value">{totalVotes}</div>
+			<div class="summary-stat-label">total votes</div>
+		</div>
+		<div class="summary-stat">
+			<div class="summary-stat-value">{activeRoomLabel}</div>
+			<div class="summary-stat-label">active room filter</div>
 		</div>
 	</div>
-</main>
+
+	<div style="margin-top: 2rem;">
+		<h3 style="font-size: 0.75rem; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.5rem;">Calendar view</h3>
+		<p style="font-size: 0.75rem; color: var(--muted); margin-bottom: 0.75rem;">
+			{selectedDay ? formatLongDay(selectedDay) : 'Select a day with activity'}
+		</p>
+
+		<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.25rem; font-size: 0.6875rem; color: var(--muted); text-align: center; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.25rem;">
+			<span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+		</div>
+
+		<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.25rem;">
+			{#each Array(calendarOffset) as _, idx}
+				<div></div>
+			{/each}
+
+			{#each calendarDays as day (day)}
+				{@const count = countsByDay.get(day) || 0}
+				{@const intensity = getIntensity(count)}
+				<button
+					type="button"
+					onclick={() => selectedDay = day}
+					title="{day}: {count} links"
+					style="
+						height: 2.5rem;
+						border: 1px solid var(--border);
+						background: {getIntensityColor(intensity)};
+						color: var(--fg);
+						cursor: pointer;
+						display: flex;
+						flex-direction: column;
+						justify-content: flex-start;
+						align-items: flex-start;
+						padding: 0.25rem;
+						font-size: 0.75rem;
+						text-align: left;
+						border-radius: var(--radius);
+						{selectedDay === day ? 'border-color: var(--accent); outline: 1px solid var(--accent);' : ''}
+					"
+				>
+					<span style="font-weight: 500;">{new Date(`${day}T00:00:00Z`).getUTCDate()}</span>
+					<span style="font-size: 0.6875rem; opacity: 0.8;">{count > 0 ? count : ''}</span>
+				</button>
+			{/each}
+		</div>
+	</div>
+
+	<div style="margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+		{#if loading}
+			<div class="loading">Loading summary...</div>
+		{:else if error}
+			<div class="empty">{error}</div>
+		{:else if selectedDayLinks.length === 0}
+			<div class="empty">No links match this filter.</div>
+		{:else}
+			<ul class="linklist">
+				{#each selectedDayLinks as item, idx (item.id || `${item.url}-${idx}`)}
+					{@const url = item.url || item.meta?.url || '#'}
+					{@const title = item.title || item.name || item.meta?.title || url}
+					{@const domain =
+						item.domain ||
+						item.meta?.domain ||
+						(() => {
+							try {
+								return new URL(url).hostname;
+							} catch (e) {
+								return '';
+							}
+						})()}
+					<li class="linklist-item">
+						<div class="link-row">
+							<div class="link-main">
+								<a class="link-title" href={url} target="_blank" rel="noopener noreferrer">{title}</a>
+								<div class="link-meta">
+									<span class="link-domain">{domain}</span>
+									<span class="link-room">{roomName(item)}</span>
+									<span class="link-votes">{item.count ? `${item.count} votes` : ''}</span>
+								</div>
+							</div>
+						</div>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</div>
+
+	<p style="margin-top: 2rem; text-align: center;">
+		<a href="/" style="color: var(--muted); font-size: 0.875rem;">Back to feed</a>
+	</p>
+</div>

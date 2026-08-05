@@ -5,19 +5,33 @@ import type { Link, RankMode } from '$lib/types';
 
 const LINKS_PER_PAGE = 50;
 
+export interface PaginatedLinksInitial {
+	items: Link[];
+	total: number;
+	hasMore: boolean;
+}
+
 /**
  * Paginated links loading with infinite scroll + localStorage caching.
  * Re-fetches from page 0 whenever the rank `mode` changes.
+ *
+ * When `initial` is provided (server-rendered seed), the first page is not
+ * re-fetched on mount; only later mode changes trigger a client fetch.
  */
-export function createPaginatedLinks(getMode: () => RankMode) {
+export function createPaginatedLinks(
+	getMode: () => RankMode,
+	initial?: PaginatedLinksInitial
+) {
 	const mode = $derived(getMode());
 
-	let links = $state<Link[] | null>(null);
-	let isLoading = $state(true);
+	let links = $state<Link[] | null>(initial ? initial.items : null);
+	let isLoading = $state(initial ? false : true);
 	let isRefreshed = $state(false);
-	let hasMore = $state(true);
-	let offset = $state(0);
-	let allLinksCount = $state(0);
+	let hasMore = $state(initial ? initial.hasMore : true);
+	let offset = $state(initial ? initial.items.length : 0);
+	let allLinksCount = $state(initial ? initial.total : 0);
+
+	let isSeeded = $state(Boolean(initial));
 
 	async function fetchLinks(pageOffset = 0) {
 		try {
@@ -69,6 +83,12 @@ export function createPaginatedLinks(getMode: () => RankMode) {
 	$effect(() => {
 		// track mode so this re-runs when the rank mode changes
 		void mode;
+		// On the first client run after SSR seeding, keep the server-rendered
+		// page instead of re-fetching page 0.
+		if (isSeeded) {
+			isSeeded = false;
+			return;
+		}
 		links = null;
 		offset = 0;
 		allLinksCount = 0;

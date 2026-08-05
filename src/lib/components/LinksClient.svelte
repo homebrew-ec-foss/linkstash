@@ -5,8 +5,18 @@
 	import Header from '$lib/components/Header.svelte';
 	import LinksList from '$lib/components/LinksList.svelte';
 	import SuggestionsPanel from '$lib/components/SuggestionsPanel.svelte';
+	import { getFromLocalStorage, setToLocalStorage } from '$lib/utils/storage';
+	import { SETTINGS_LAYOUT_KEY } from '$lib/constants';
 	import { logger } from '$lib/logger';
+	import posthog from 'posthog-js';
 	import type { RankMode, Link, RelatedLink, RelatedGroup } from '$lib/types';
+	import type { PaginatedLinksInitial } from '$lib/stores/links.svelte';
+
+	interface Props {
+		initialPage?: PaginatedLinksInitial;
+	}
+
+	let { initialPage }: Props = $props();
 
 	let rankMode: RankMode = $state('latest');
 	let suggestionsExpanded = $state(false);
@@ -15,7 +25,22 @@
 	let suggestedLoading = $state(false);
 	let suggestedSourceTitle = $state('');
 
-	const store = createPaginatedLinks(() => rankMode);
+	// Layout preference: default to card grid. Read from localStorage only on the
+	// client (after hydration) to avoid an SSR/client mismatch.
+	let compactMode = $state(false);
+
+	$effect(() => {
+		compactMode = getFromLocalStorage<boolean>(SETTINGS_LAYOUT_KEY) ?? false;
+	});
+
+	function toggleCompact() {
+		compactMode = !compactMode;
+		setToLocalStorage(SETTINGS_LAYOUT_KEY, compactMode);
+		posthog.capture('layout_toggled', { layout: compactMode ? 'compact' : 'card' });
+	}
+
+	// svelte-ignore state_referenced_locally -- initialPage is read once to seed the store
+	const store = createPaginatedLinks(() => rankMode, initialPage);
 
 	// Load related links/suggestions based on the top link - only when expanded
 	$effect(() => {
@@ -68,13 +93,14 @@
 	}
 </script>
 
-<div class="card">
-	<Header
+<Header
 		links={store.links || []}
 		onOpenReader={() => {
 			const firstLink = store.links?.find((l) => Boolean(l.id));
 			if (firstLink) handleOpenReader(firstLink);
 		}}
+		compact={compactMode}
+		onToggleCompact={toggleCompact}
 		suggestionsExpanded={suggestionsExpanded}
 		onToggleSuggestions={() => (suggestionsExpanded = !suggestionsExpanded)}
 	/>
@@ -91,6 +117,7 @@
 
 		<LinksList
 			groups={dateGroups}
+			compact={compactMode}
 			isLoading={store.isLoading}
 			isRefreshed={store.isRefreshed}
 			hasMore={store.hasMore}
@@ -98,4 +125,3 @@
 			onLoadMore={store.loadMore}
 		/>
 	</div>
-</div>

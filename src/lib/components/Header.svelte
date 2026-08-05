@@ -1,11 +1,13 @@
 <script lang="ts">
-	import { BookOpen, ExternalLink, Sparkles } from 'lucide-svelte';
+	import { BookOpen, ExternalLink, LayoutGrid, Rows3, Sparkles } from 'lucide-svelte';
 	import posthog from 'posthog-js';
 	import type { Link } from '$lib/types';
 
 	interface Props {
 		links: Link[];
 		onOpenReader: () => void;
+		compact?: boolean;
+		onToggleCompact?: () => void;
 		suggestionsExpanded?: boolean;
 		onToggleSuggestions?: () => void;
 	}
@@ -13,6 +15,8 @@
 	let {
 		links,
 		onOpenReader,
+		compact = false,
+		onToggleCompact,
 		suggestionsExpanded = false,
 		onToggleSuggestions
 	}: Props = $props();
@@ -25,59 +29,60 @@
 	}
 </script>
 
-<div class="header-container">
-	<a
-		href="https://hsp-ec.xyz"
-		target="_blank"
-		rel="noopener noreferrer"
-		class="site-brand-link"
-		aria-label="Open hsp-ec.xyz"
-	>
-		<img
-			src="https://hsp-ec.xyz/static/images/hsp-spinner.svg"
-			alt="HSP"
-			class="site-brand-icon"
-			width={16}
-			height={16}
-		/>
-		<span class="site-brand-text">HSP Linkstash</span>
-	</a>
+<header class="header">
+	<div class="container header-row">
+		<a href="/" class="site-title">linkstash</a>
+		<div class="header-actions">
+			{#if onToggleCompact}
+				<button
+					type="button"
+					class="icon-btn"
+					title={compact ? 'Switch to card view' : 'Switch to compact rows'}
+					aria-label={compact ? 'Switch to card view' : 'Switch to compact rows'}
+					aria-pressed={compact}
+					onclick={onToggleCompact}
+				>
+					{#if compact}
+						<LayoutGrid size={14} />
+					{:else}
+						<Rows3 size={14} />
+					{/if}
+				</button>
+			{/if}
 
-	<div style="flex: 1"></div>
-
-	<div class="header-actions">
-		<button
-			type="button"
-			class="header-icon-button"
-			title="Open reading view"
-			aria-label="Open reading view"
-			onclick={handleReaderClick}
-		>
-			<BookOpen size={18} />
-		</button>
-
-		{#if onToggleSuggestions}
 			<button
 				type="button"
-				class="header-icon-button"
-				title={suggestionsExpanded ? 'Hide suggestions' : 'Show suggestions'}
-				aria-label={suggestionsExpanded ? 'Hide suggestions' : 'Show suggestions'}
-				onclick={onToggleSuggestions}
-				aria-pressed={suggestionsExpanded}
+				class="icon-btn"
+				title="Open reading view"
+				aria-label="Open reading view"
+				onclick={handleReaderClick}
 			>
-				<Sparkles size={18} />
+				<BookOpen size={14} />
 			</button>
-		{/if}
 
-		<a
-			href="https://github.com/homebrew-ec-foss/linkstash"
-			class="header-icon-button"
-			target="_blank"
-			rel="noopener noreferrer"
-			aria-label="GitHub repository"
-			onclick={() => posthog.capture('github_link_clicked')}
-		>
-			<ExternalLink size={18} />
-		</a>
+			{#if onToggleSuggestions}
+				<button
+					type="button"
+					class="icon-btn"
+					title={suggestionsExpanded ? 'Hide suggestions' : 'Show suggestions'}
+					aria-label={suggestionsExpanded ? 'Hide suggestions' : 'Show suggestions'}
+					onclick={onToggleSuggestions}
+					aria-pressed={suggestionsExpanded}
+				>
+					<Sparkles size={14} />
+				</button>
+			{/if}
+
+			<a
+				href="https://github.com/homebrew-ec-foss/linkstash"
+				class="icon-btn"
+				target="_blank"
+				rel="noopener noreferrer"
+				aria-label="GitHub repository"
+				onclick={() => posthog.capture('github_link_clicked')}
+			>
+				<ExternalLink size={14} />
+			</a>
+		</div>
 	</div>
-</div>
+</header>

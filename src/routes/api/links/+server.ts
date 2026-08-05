@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { getClient, initDb, sanitizeLink, getLinkByUrl, rowToLink } from '$lib/server/db';
+import { getClient, initDb, sanitizeLink, getLinkByUrl, rowToLink, getPaginatedLinks } from '$lib/server/db';
 import { sortLinksByMode, normalizeRankMode } from '$lib/sorting';
 import { logger } from '$lib/logger';
 import type { Link, RankMode } from '$lib/types';
@@ -80,54 +80,40 @@ export const GET: RequestHandler = async (event) => {
 			});
 		}
 
-		// For latest/top modes, use database pagination for efficiency
-		const orderClause = mode === 'top' ? 'ORDER BY l.count DESC, li.ts DESC' : 'ORDER BY li.ts DESC';
-
-		let queryArgs: any[] = [];
-		let queryLimitClause = '';
-
+		// For search queries (limit >= 10000), fetch everything and paginate in memory
 		if (isSearchQuery) {
-			queryLimitClause = '';
-			queryArgs = [];
-		} else {
-			queryLimitClause = 'LIMIT ? OFFSET ?';
-			queryArgs = [limit, offset];
+			const fullResult = await client.execute({
+				sql: `SELECT l.id, l.url, li.domain, l.submitted_by, li.ts, l.count, COALESCE(l.meta, li.meta) AS meta
+              FROM link_index li
+              LEFT JOIN links l ON l.id = li.link_id
+              ORDER BY li.ts DESC`,
+				args: []
+			});
+
+			const links: Link[] = fullResult.rows.map(mapRow).slice(offset, offset + limit);
+			const withIndex = links.map((link, idx) => ({
+				...link,
+				displayIndex: offset + idx + 1
+			}));
+
+			const total = fullResult.rows.length;
+			return json({
+				items: withIndex,
+				total,
+				offset,
+				limit,
+				hasMore: offset + limit < total
+			});
 		}
 
-		const result = await client.execute({
-			sql: `SELECT l.id, l.url, li.domain, l.submitted_by, li.ts, l.count, COALESCE(l.meta, li.meta) AS meta
-            FROM link_index li
-            LEFT JOIN links l ON l.id = li.link_id
-            ${orderClause}
-            ${queryLimitClause}`,
-			args: queryArgs
-		});
-
-		// Get total count for pagination metadata
-		const countResult = await client.execute({
-			sql: `SELECT COUNT(*) AS count FROM link_index`,
-			args: []
-		});
-		const total = (countResult.rows[0]?.count as number) || 0;
-
-		let links: Link[] = result.rows.map(mapRow);
-
-		// For search queries, apply pagination in memory
-		if (isSearchQuery) {
-			links = links.slice(offset, offset + limit);
-		}
-
-		const withIndex = links.map((link, idx) => ({
-			...link,
-			displayIndex: offset + idx + 1
-		}));
-
+		// For latest/top modes, use the shared paginated query (matches SSR output)
+		const page = await getPaginatedLinks({ mode: mode as 'latest' | 'top', offset, limit });
 		return json({
-			items: withIndex,
-			total,
-			offset,
-			limit,
-			hasMore: offset + limit < total
+			items: page.items,
+			total: page.total,
+			offset: page.offset,
+			limit: page.limit,
+			hasMore: page.hasMore
 		});
 	} catch (error) {
 		logger.error('Error fetching links', error);

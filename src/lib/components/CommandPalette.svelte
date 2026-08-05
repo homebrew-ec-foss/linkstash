@@ -20,7 +20,6 @@
 
 	let debounceTimer: number | undefined;
 
-	// Listen for Cmd+K / Ctrl+K and Escape
 	$effect(() => {
 		function handleKeyDown(e: KeyboardEvent) {
 			if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -38,14 +37,12 @@
 		return () => window.removeEventListener('keydown', handleKeyDown);
 	});
 
-	// Focus input when opened
 	$effect(() => {
 		if (isOpen) {
 			queueMicrotask(() => inputEl?.focus());
 		}
 	});
 
-	// Search articles (debounced)
 	$effect(() => {
 		const query = search.trim();
 		if (!query) {
@@ -130,19 +127,8 @@
 </script>
 
 {#if isOpen}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div
-		class="command-palette-overlay"
-		role="presentation"
-		onclick={() => (isOpen = false)}
-	>
-		<div
-			class="command-palette-modal"
-			role="dialog"
-			aria-modal="true"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
-		>
+	<div class="cmd-overlay" role="presentation" onclick={() => (isOpen = false)}>
+		<div class="cmd-modal" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()}>
 			<div class="command-palette-header">
 				<input
 					bind:this={inputEl}
@@ -150,31 +136,31 @@
 					type="text"
 					placeholder="Search articles... (Press ESC to close)"
 					onkeydown={handleKeyDown}
-					class="command-palette-input"
+					class="cmd-input"
 				/>
 			</div>
 
 			{#if loading}
-				<div class="command-palette-empty">Searching...</div>
+				<div class="cmd-results"><div style="padding: 12px; text-align: center; color: var(--muted);">Searching...</div></div>
 			{:else if results.length === 0 && search}
-				<div class="command-palette-empty">No articles found</div>
+				<div class="cmd-results"><div style="padding: 12px; text-align: center; color: var(--muted);">No articles found</div></div>
 			{:else if results.length === 0}
-				<div class="command-palette-empty">Start typing to search articles</div>
+				<div class="cmd-results"><div style="padding: 12px; text-align: center; color: var(--muted);">Start typing to search articles</div></div>
 			{:else}
-				<div class="command-palette-results">
+				<div class="cmd-results">
 					{#each results as result, idx (result.id)}
 						{@const title = result.title || result.meta?.title || 'Untitled'}
 						{@const domain = result.domain || result.meta?.domain || 'unknown'}
 						<button
 							type="button"
-							class="command-palette-item {idx === selectedIndex ? 'selected' : ''}"
+							class="cmd-item {idx === selectedIndex ? 'selected' : ''}"
 							onclick={() => handleSelect(result)}
 						>
-							<div class="command-palette-item-title">{title}</div>
-							<div class="command-palette-item-meta">
-								<span class="command-palette-domain">{domain}</span>
+							<div class="cmd-item-title">{title}</div>
+							<div class="cmd-item-meta">
+								<span>{domain}</span>
 								{#if result.count}
-									<span class="command-palette-votes">• {result.count} votes</span>
+									<span>• {result.count} votes</span>
 								{/if}
 							</div>
 						</button>
@@ -182,7 +168,7 @@
 				</div>
 			{/if}
 
-			<div class="command-palette-footer">
+			<div style="padding: 8px 12px; border-top: 1px solid var(--border); font-size: 10px; color: var(--muted); display: flex; gap: 12px;">
 				<span>↑ ↓ to navigate</span>
 				<span>ENTER to open</span>
 				<span>ESC to close</span>

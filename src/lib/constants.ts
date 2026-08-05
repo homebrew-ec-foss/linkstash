@@ -8,3 +8,6 @@ export const READER_EXCERPT_MAX_LENGTH = 300;
 
 // Cache constants
 export const LINKS_CACHE_PREFIX = 'links_cache';
+
+// UI preferences (persisted in localStorage)
+export const SETTINGS_LAYOUT_KEY = 'settings_layout';

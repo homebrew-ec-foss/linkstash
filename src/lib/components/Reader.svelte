@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { Sparkles } from 'lucide-svelte';
 	import posthog from 'posthog-js';
 	import { renderMarkdown } from '$lib/markdown';
 	import { extractFirstHeading } from '$lib/text-utils';
@@ -33,9 +32,6 @@
 	let relatedItems = $state<SuggestedItem[]>([]);
 	let relatedGroups = $state<SuggestedGroup[]>([]);
 	let relatedLoading = $state(false);
-	let suggestionsExpanded = $state(true);
-	let fontSize = $state(16);
-	let fontFamily = $state('system-ui');
 
 	let articleEl: HTMLElement | null = $state(null);
 
@@ -46,7 +42,6 @@
 	const currentId = $derived(queue.length > 0 ? queue[index] : undefined);
 	const currentMeta = $derived(currentId ? metas[currentId] : null);
 
-	// Online/offline detection
 	$effect(() => {
 		const handleOnline = () => (isOnline = true);
 		const handleOffline = () => (isOnline = false);
@@ -59,7 +54,6 @@
 		};
 	});
 
-	// Parse location and build queue: prefer /reader/:id, fallback to legacy hash style.
 	$effect(() => {
 		const path = $page.url.pathname;
 		const hash = $page.url.hash.replace(/^#/, '');
@@ -100,7 +94,6 @@
 						queue = allIds;
 						index = pos;
 					} else {
-						// not in index: show single first then the rest
 						queue = [single, ...allIds.filter((i: string) => i !== single)];
 						index = 0;
 					}
@@ -109,7 +102,6 @@
 					index = 0;
 				}
 			} else {
-				// multiple ids provided explicitly — follow that
 				queue = ids;
 				index = 0;
 			}
@@ -118,11 +110,9 @@
 		readLocation();
 	});
 
-	// Load meta data for queue items from the stored links cache
 	$effect(() => {
 		if (!queue.length) return;
 
-		// Track reader page opened event
 		posthog.capture('reader_page_opened', {
 			queue_length: queue.length,
 			initial_item_id: queue[0]
@@ -138,7 +128,6 @@
 			if (l && l.id) m[l.id] = l;
 		});
 
-		// Keep only metas for items in the queue
 		const filtered: Record<string, any> = {};
 		queue.forEach((id) => {
 			if (m[id]) filtered[id] = m[id];
@@ -146,7 +135,6 @@
 		metas = filtered;
 	});
 
-	// Fetch metadata for current article if not available
 	$effect(() => {
 		if (!currentId || metas[currentId]) return;
 
@@ -162,12 +150,10 @@
 					metas = { ...metas, [currentId]: currentItem };
 				}
 			} catch (e) {
-				// ignore errors
 			}
 		})();
 	});
 
-	// Load content for current index
 	$effect(() => {
 		const id = currentId;
 		if (!id) return;
@@ -177,7 +163,6 @@
 			error = null;
 			content = null;
 
-			// Try to load cached content from localStorage first
 			try {
 				const cached = getFromLocalStorage<{ ts: number; content: string }>(
 					`reader:content:${id}`
@@ -187,7 +172,6 @@
 					isFromCache = true;
 				}
 			} catch (err) {
-				// ignore localStorage access errors
 			}
 
 			try {
@@ -212,10 +196,8 @@
 				content = txt;
 				isFromCache = false;
 
-				// Persist content to localStorage for offline reading
 				setToLocalStorage(`reader:content:${id}`, { ts: Date.now(), content: txt });
 
-				// Try to extract H1 and update links_cache if it lacks a title
 				const extracted = extractFirstHeading(txt || '');
 				if (extracted.h1) {
 					const cache = getFromLocalStorage<any[]>(getLinksCacheKey('latest'));
@@ -242,7 +224,6 @@
 		})();
 	});
 
-	// Navigation helpers (wrap around at ends)
 	function gotoNext() {
 		if (!queue || queue.length === 0) return;
 		const newIndex = index < queue.length - 1 ? index + 1 : 0;
@@ -269,7 +250,6 @@
 		index = newIndex;
 	}
 
-	// Keyboard support
 	$effect(() => {
 		void index;
 		void queue;
@@ -289,7 +269,6 @@
 		return () => window.removeEventListener('keydown', onKey);
 	});
 
-	// Touch handlers
 	function handleTouchStart(e: TouchEvent) {
 		const t = e.touches[0];
 		touchStartX = t.clientX;
@@ -331,7 +310,6 @@
 		index = newIndex;
 	}
 
-	// Load related suggestions for the current item
 	$effect(() => {
 		const id = currentId;
 		if (!id) {
@@ -357,7 +335,6 @@
 		})();
 	});
 
-	// Ensure every rendered page has an H1: prefer meta title, then hostname (from URL), then id
 	const defaultH1Text = $derived.by(() => {
 		if (currentMeta?.meta?.title) return currentMeta.meta.title;
 		if (currentMeta?.title) return currentMeta.title;
@@ -365,7 +342,6 @@
 			try {
 				return new URL(currentMeta.url).hostname;
 			} catch (e) {
-				// ignore invalid URL
 			}
 		}
 		if (currentId) return currentId;
@@ -379,12 +355,10 @@
 		currentMeta?.meta?.title || currentMeta?.title || extracted.h1 || ''
 	);
 
-	// Update document title to show current article
 	$effect(() => {
 		document.title = metaTitle || 'Reader';
 	});
 
-	// Proxy-fallback for images that fail to load (delegated so sanitized HTML stays clean)
 	$effect(() => {
 		const el = articleEl;
 		if (!el) return;
@@ -399,237 +373,246 @@
 		el.addEventListener('error', handleError, true);
 		return () => el.removeEventListener('error', handleError, true);
 	});
+
+	function getHost(url: string): string {
+		try {
+			return new URL(url).hostname;
+		} catch {
+			return '';
+		}
+	}
 </script>
 
-<div
-	class="reader-overlay"
-	role="region"
-	ontouchstart={handleTouchStart}
-	ontouchend={handleTouchEnd}
-	style="min-height: 100vh"
->
-	<div class="reader-panel reader-minimal" style="height: 100vh">
-		<aside class="reader-sidebar">
-			<div class="sidebar-title">{metaTitle || 'Reader'}</div>
-			<div class="sidebar-excerpt">{currentMeta?.summary || ''}</div>
-		</aside>
-
-		<div class="reader-body">
-			<div class="reader-ctrls-vertical" role="toolbar" aria-label="Reader navigation">
-				<button class="reader-btn-small" type="button" onclick={gotoPrev}>‹</button>
-				<button class="reader-btn-small" type="button" onclick={gotoNext}>›</button>
-				{#if currentMeta?.url}
-					<a
-						class="reader-btn-small"
-						href={currentMeta.url}
-						target="_blank"
-						rel="noopener noreferrer"
-						aria-label="Open"
-						>⤢</a
-					>
-				{/if}
-				<button
-					class="reader-btn-small"
-					type="button"
-					onclick={() => removeFromQueue(index)}
-					aria-label="Remove"
-					>×</button
-				>
-			</div>
-
-			<div class="reader-header">
+<div class="reader" ontouchstart={handleTouchStart} ontouchend={handleTouchEnd}>
+	<div class="container">
+		<header class="reader-header">
+			<div class="reader-header-row">
 				<div class="reader-title">
 					{#if currentMeta?.url}
-						{@const host = (() => {
-							try {
-								return new URL(currentMeta.url).hostname;
-							} catch (e) {
-								return metaTitle || 'Reader';
-							}
-						})()}
-						<a
-							href={currentMeta.url}
-							target="_blank"
-							rel="noopener noreferrer"
-							class="reader-header-link"
-							>{host}</a
-						>
+						<a href={currentMeta.url} target="_blank" rel="noopener noreferrer">
+							{getHost(currentMeta.url)}
+						</a>
+						<span class="reader-source">{currentMeta.meta?.title || extracted.h1 || currentMeta.title || currentId}</span>
 					{:else}
 						{metaTitle || 'Reader'}
 					{/if}
 				</div>
-				<div class="reader-status">
-					{#if !isOnline}
-						<span class="status-badge offline">Offline</span>
-					{/if}
-					{#if isFromCache}
-						<span class="status-badge cached">Cached</span>
-					{/if}
-				</div>
-				<div class="reader-toolbar">
-					<div class="toolbar-group">
-						<button
-							type="button"
-							class="toolbar-button"
-							title="Decrease font size"
-							onclick={() => (fontSize = Math.max(12, fontSize - 1))}
-							>−</button
-						>
-						<input
-							type="range"
-							min="12"
-							max="24"
-							bind:value={fontSize}
-							class="toolbar-slider"
-							title="Font size: {fontSize}px"
-						/>
-						<button
-							type="button"
-							class="toolbar-button"
-							title="Increase font size"
-							onclick={() => (fontSize = Math.min(24, fontSize + 1))}
-							>+</button
-						>
-					</div>
-
-					<div class="toolbar-group">
-						<select bind:value={fontFamily} class="toolbar-select" title="Font family">
-							<option value="system-ui">System</option>
-							<option value="Baskerville, 'Times New Roman', serif">Baskerville</option>
-							<option value="Georgia, serif">Georgia</option>
-							<option value="EB Garamond, serif">EB Garamond</option>
-							<option value="Garamond, serif">Garamond</option>
-							<option
-								value="'Palatino Linotype', 'Book Antiqua', Palatino, serif"
-								>Palatino</option
-							>
-							<option value="Cambria, serif">Cambria</option>
-							<option value="'Times New Roman', serif">Times</option>
-							<option value="Courier, monospace">Monospace</option>
-						</select>
-					</div>
-
-					<div class="toolbar-group toolbar-group-end">
-						<button
-							type="button"
-							class="toolbar-button"
-							onclick={() => (suggestionsExpanded = !suggestionsExpanded)}
-							title={suggestionsExpanded ? 'Hide suggestions' : 'Show suggestions'}
-							aria-label={suggestionsExpanded ? 'Hide suggestions' : 'Show suggestions'}
-						>
-							<Sparkles size={16} />
-						</button>
-						{#if currentMeta?.url}
-							<a
-								href={currentMeta.url}
-								target="_blank"
-								rel="noopener noreferrer"
-								class="toolbar-button"
-								title="Open original"
-								>↗</a
-							>
+				{#if !isOnline || isFromCache}
+					<div class="reader-status">
+						{#if !isOnline}
+							<span class="status-badge offline">Offline</span>
 						{/if}
-						<button
-							type="button"
-							class="toolbar-button"
-							onclick={() => history.back()}
-							aria-label="Close"
-							title="Close"
-							>✕</button
-						>
+						{#if isFromCache}
+							<span class="status-badge cached">Cached</span>
+						{/if}
 					</div>
-				</div>
+				{/if}
 			</div>
+		</header>
 
-			<div class="reader-content reader-content-with-suggestions">
-				<div class="reader-article-col">
-					{#if loading}
-						<div class="p-6 text-center text-gray-500">Loading…</div>
-					{:else if error}
-						<div class="p-6 text-center text-gray-500">{error}</div>
-					{:else if content}
-						<article
-							class="markdown-body"
-							style="font-size: {fontSize}px; font-family: {fontFamily}"
-						>
-							<h1 class="markdown-title" style="font-family: {fontFamily}">
-								{metaTitle || 'Untitled'}
-							</h1>
-							<div bind:this={articleEl}>{@html renderedHtml}</div>
-						</article>
-					{:else}
-						<div class="p-6 text-center text-gray-500">No content.</div>
+		<main class="reader-content">
+			{#if loading}
+				<div class="loading">Loading…</div>
+			{:else if error}
+				<div class="empty">{error}</div>
+			{:else if content}
+				<article bind:this={articleEl}>
+					<h1>{metaTitle || extracted.h1 || defaultH1Text}</h1>
+					<div>{@html renderedHtml}</div>
+				</article>
+
+				{#if relatedItems.length > 0 || relatedGroups.length > 0}
+					<hr style="margin: 2rem 0; border-top: 1px solid var(--border);" />
+
+					{#if relatedItems.length > 0}
+						<h3 class="related-heading">Related</h3>
+						<ul style="list-style: none; padding: 0; margin: 0;">
+							{#each relatedItems.slice(0, 8) as item (item.id)}
+								<li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border);">
+									<a href="/reader/{item.id}" class="related-item-title" style="color: var(--link); border-bottom-color: transparent;">{item.title}</a>
+									<div class="related-item-meta">
+										{item.domain} • {Math.round(item.score * 100)}%
+									</div>
+								</li>
+							{/each}
+						</ul>
 					{/if}
-				</div>
 
-				<aside class="reader-suggestions-side" aria-label="Suggested articles and groups">
-					{#if suggestionsExpanded}
-						<div class="suggestion-section-title">Suggested Articles</div>
-						{#if relatedLoading}
-							<div class="suggestion-empty">Finding related links...</div>
-						{:else if relatedItems.length === 0}
-							<div class="suggestion-empty">No related links yet.</div>
-						{:else}
-							<ol class="suggestion-list">
-								{#each relatedItems.slice(0, 10) as item (item.id)}
-									<li>
-										<a
-											href={`/reader/${encodeURIComponent(item.id)}`}
-											class="suggestion-link"
-										>
-											<span class="suggestion-title">{item.title}</span>
-											<span class="suggestion-meta"
-												>{item.domain || 'unknown domain'} •{' '}
-												{Math.round(item.score * 100)}%</span
-											>
-										</a>
-									</li>
-								{/each}
-							</ol>
-						{/if}
-
-						<div class="suggestion-section-title">Suggested Groups</div>
-						{#if relatedGroups.length === 0}
-							<div class="suggestion-empty">No groups available.</div>
-						{:else}
-							<ul class="suggestion-group-list">
-								{#each relatedGroups.slice(0, 8) as group (group.name)}
-									<li>
-										<span>{group.name}</span>
-										<strong>{group.count}</strong>
-									</li>
-								{/each}
-							</ul>
-						{/if}
+					{#if relatedGroups.length > 0}
+						<h3 class="related-heading">Groups</h3>
+						<ul style="list-style: none; padding: 0; margin: 0;">
+							{#each relatedGroups.slice(0, 6) as group (group.name)}
+								<li style="padding: 0.25rem 0; display: flex; justify-content: space-between; border-bottom: 1px solid var(--border);">
+									<span class="related-group-item">{group.name}</span>
+									<strong class="related-group-count">{group.count}</strong>
+								</li>
+							{/each}
+						</ul>
 					{/if}
-				</aside>
-			</div>
-		</div>
-
-		<aside class="reader-queue">
-			<ol>
-				{#each queue as it, i (it)}
-					<li class={i === index ? 'active' : ''}>
-						<button
-							class="queue-title"
-							onclick={() => (index = i)}
-						>
-							{metas[it] && (metas[it].title || metas[it]?.meta?.title)
-								? metas[it].title || metas[it]?.meta?.title
-								: it}
-						</button>
-						<button
-							class="queue-remove"
-							onclick={(e) => {
-								e.stopPropagation();
-								removeFromQueue(i);
-							}}
-							aria-label="Remove"
-							>×</button
-						>
-					</li>
-				{/each}
-			</ol>
-		</aside>
+				{/if}
+			{:else}
+				<div class="empty">No content.</div>
+			{/if}
+		</main>
 	</div>
+
+	{#if queue.length > 1}
+		<footer class="reader-footer">
+			<div class="reader-footer-inner">
+				<span>Article {index + 1} of {queue.length}</span>
+				<div class="reader-footer-nav">
+					<button class="reader-btn" onclick={gotoPrev} title="Previous (←)">‹ Prev</button>
+					<button class="reader-btn" onclick={gotoNext} title="Next (→)">Next ›</button>
+				</div>
+			</div>
+		</footer>
+	{/if}
 </div>
+
+<style>
+	.reader-content {
+		padding: 2rem 0 4rem;
+	}
+
+	.reader-footer {
+		border-top: 1px solid var(--border);
+		padding: 1rem 0;
+		margin-top: 2rem;
+		font-family: Inter, system-ui, sans-serif;
+		font-size: 0.75rem;
+		color: var(--muted);
+	}
+
+	.reader-footer-inner {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 1rem;
+	}
+
+	.reader-footer-nav {
+		display: flex;
+		gap: 0.75rem;
+	}
+
+	.status-badge {
+		font-family: Inter, system-ui, sans-serif;
+		font-size: 0.6875rem;
+		padding: 0.125rem 0.375rem;
+		border-radius: 2px;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+	}
+
+	.status-badge.offline {
+		background: #ef4444;
+		color: white;
+	}
+
+	.status-badge.cached {
+		background: #f59e0b;
+		color: white;
+	}
+
+	.reader-btn {
+		padding: 0.25rem 0.625rem;
+		border: 1px solid var(--border);
+		background: var(--card);
+		color: var(--fg);
+		font-size: 0.75rem;
+		font-family: Inter, system-ui, sans-serif;
+		cursor: pointer;
+		border-radius: var(--radius);
+		text-decoration: none;
+		transition: background-color 150ms ease, border-color 150ms ease;
+	}
+
+	.reader-btn:hover {
+		background-color: rgba(0, 0, 0, 0.03);
+		border-color: var(--muted);
+	}
+
+	.reader-btn[disabled] {
+		opacity: 0.4;
+		cursor: default;
+	}
+
+	.reader-header-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		flex-wrap: wrap;
+	}
+
+	.reader-title {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--fg);
+		font-family: Inter, system-ui, sans-serif;
+	}
+
+	.reader-title a {
+		color: var(--fg);
+		border-bottom-color: transparent;
+	}
+
+	.reader-title a:hover {
+		color: var(--accent);
+		border-bottom-color: var(--accent);
+	}
+
+	.reader-source {
+		font-size: 0.75rem;
+		color: var(--muted);
+		margin-left: 0.5rem;
+		font-family: Inter, system-ui, sans-serif;
+	}
+
+	.reader-status {
+		display: flex;
+		gap: 0.375rem;
+		margin-top: 0.5rem;
+		font-size: 0.75rem;
+		font-family: Inter, system-ui, sans-serif;
+	}
+
+	.related-item-title {
+		font-family: Inter, system-ui, sans-serif;
+		font-size: 0.875rem;
+	}
+
+	.related-item-meta {
+		font-family: Inter, system-ui, sans-serif;
+		font-size: 0.75rem;
+		color: var(--muted);
+		margin-top: 0.125rem;
+	}
+
+	.related-group-item {
+		font-family: Inter, system-ui, sans-serif;
+		font-size: 0.875rem;
+	}
+
+	.related-group-count {
+		font-family: Inter, system-ui, sans-serif;
+		font-size: 0.875rem;
+	}
+
+	.related-heading {
+		font-family: Inter, system-ui, sans-serif;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--muted);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		.reader-btn:hover {
+			background-color: rgba(255, 255, 255, 0.05);
+			border-color: var(--muted);
+		}
+	}
+</style>
